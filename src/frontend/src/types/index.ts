@@ -151,3 +151,60 @@ export const CATEGORIES = [
 ] as const;
 
 export type Category = typeof CATEGORIES[number];
+
+// Schedule types
+export interface Schedule {
+  id: number;
+  user_id: number;
+  note_id: number | null;
+  title: string;
+  description: string | null;
+  location: string | null;
+  participants: string[];
+  start_time: string;
+  end_time: string | null;
+  is_all_day: boolean;
+  recurrence: string | null;
+  reminder_minutes: number | null;
+  status: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ScheduleListResponse {
+  total: number;
+  page: number;
+  page_size: number;
+  items: Schedule[];
+}
+
+export interface ScheduleCreate {
+  title: string;
+  description?: string;
+  location?: string;
+  participants?: string[];
+  start_time: string;
+  end_time?: string;
+  is_all_day?: boolean;
+  recurrence?: string;
+  reminder_minutes?: number;
+  note_id?: number;
+}
+
+export interface ScheduleUpdate {
+  title?: string;
+  description?: string;
+  location?: string;
+  participants?: string[];
+  start_time?: string;
+  end_time?: string;
+  is_all_day?: boolean;
+  recurrence?: string;
+  reminder_minutes?: number;
+}
+
+export interface ScheduleStatusUpdate {
+  status: string;
+}
+
+export type ScheduleStatus = 'scheduled' | 'completed' | 'cancelled';

@@ -29,6 +29,9 @@ class Settings(BaseSettings):
     deepseek_model: str = "deepseek-chat"
     deepseek_base_url: str = "https://api.deepseek.com/v1"
 
+    # OpenAI settings (optional, for future use)
+    openai_api_key: str = ""
+
     # Storage paths
     notes_base_path: str = "./data/notes"
     backup_path: str = "./data/backups"

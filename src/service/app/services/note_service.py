@@ -280,6 +280,34 @@ class NoteService:
 
         return True
 
+    def delete_all_notes(self, user_id: int, hard_delete: bool = False) -> int:
+        """
+        Delete all notes for a user (for debugging).
+
+        Args:
+            user_id: User ID
+            hard_delete: If True, permanently delete; otherwise soft delete
+
+        Returns:
+            Number of deleted notes
+        """
+        query = self.db.query(Note).filter(Note.user_id == user_id)
+
+        if hard_delete:
+            # Permanently delete all notes
+            count = query.count()
+            query.delete(synchronize_session=False)
+        else:
+            # Soft delete
+            count = query.filter(Note.status != "deleted").count()
+            query.filter(Note.status != "deleted").update(
+                {"status": "deleted", "updated_at": datetime.now()},
+                synchronize_session=False
+            )
+
+        self.db.commit()
+        return count
+
     def search_notes(
         self,
         user_id: int,

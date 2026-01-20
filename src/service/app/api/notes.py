@@ -210,3 +210,21 @@ async def delete_note(
         raise HTTPException(status_code=404, detail="Note not found")
 
     return {"message": "Note deleted successfully"}
+
+
+@router.delete("")
+async def delete_all_notes(
+    hard_delete: bool = Query(False, description="Permanently delete all notes"),
+    db: Session = Depends(get_db),
+):
+    """
+    Delete all notes (for debugging purposes).
+
+    Use hard_delete=true to permanently remove all notes.
+    """
+    user_id = get_or_create_default_user(db)
+    service = NoteService(db)
+
+    count = service.delete_all_notes(user_id, hard_delete=hard_delete)
+
+    return {"message": f"Deleted {count} notes", "count": count}

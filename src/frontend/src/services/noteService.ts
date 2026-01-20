@@ -38,4 +38,11 @@ export const noteService = {
   async deleteNote(id: number): Promise<void> {
     await api.delete(`/notes/${id}`);
   },
+
+  async deleteAllNotes(hardDelete: boolean = false): Promise<{ message: string; count: number }> {
+    const response = await api.delete<{ message: string; count: number }>('/notes', {
+      params: { hard_delete: hardDelete },
+    });
+    return response.data;
+  },
 };

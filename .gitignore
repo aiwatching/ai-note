@@ -33,6 +33,7 @@ wheels/
 venv/
 .venv/
 ENV/
+.claude/
 
 # Node
 node_modules/

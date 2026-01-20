@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .config import get_settings
 from .database import init_db
-from .api import notes, search, todos
+from .api import notes, search, todos, schedule
 
 settings = get_settings()
 
@@ -40,6 +40,7 @@ app.add_middleware(
 app.include_router(notes.router, prefix="/api/v1/notes", tags=["notes"])
 app.include_router(search.router, prefix="/api/v1/search", tags=["search"])
 app.include_router(todos.router, prefix="/api/v1/todos", tags=["todos"])
+app.include_router(schedule.router, prefix="/api/v1", tags=["schedules"])
 
 
 @app.get("/")
