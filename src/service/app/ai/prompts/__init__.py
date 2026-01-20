@@ -1,0 +1,11 @@
+"""AI Prompt templates."""
+from .analyze import ANALYZE_NOTE_PROMPT
+from .search import SEMANTIC_SEARCH_PROMPT
+from .extract import EXTRACT_TODOS_PROMPT, EXTRACT_SCHEDULE_PROMPT
+
+__all__ = [
+    "ANALYZE_NOTE_PROMPT",
+    "SEMANTIC_SEARCH_PROMPT",
+    "EXTRACT_TODOS_PROMPT",
+    "EXTRACT_SCHEDULE_PROMPT",
+]
