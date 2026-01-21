@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import MDEditor from '@uiw/react-md-editor';
 import {
   Loader2,
   Plus,
@@ -10,6 +11,8 @@ import {
   FolderOpen,
   X,
   Settings,
+  Eye,
+  Edit3,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -37,9 +40,25 @@ export function HomePage() {
   const [analysisResult, setAnalysisResult] = useState<Note | null>(null);
   // 笔记选择列表
   const [showNotesList, setShowNotesList] = useState(false);
+  // Markdown 编辑器预览模式: 'edit' | 'preview' | 'live'
+  const [editorMode, setEditorMode] = useState<'edit' | 'preview' | 'live'>('live');
 
   const { notes, fetchNotes, createNote, updateNote, isLoading: noteLoading } = useNoteStore();
-  const { defaultAnalysisPrompt } = useSettingsStore();
+  const { deepAnalysisPrompt } = useSettingsStore();
+
+  // 键盘快捷键: Cmd/Ctrl + S 保存
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+        e.preventDefault();
+        if (noteContent.trim() && !isSaving && !isProcessing) {
+          handleSave();
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [noteContent, isSaving, isProcessing]);
 
   // 从 Notes 页面传来的编辑 note id
   const editNoteId = (location.state as { editNoteId?: number } | null)?.editNoteId;
@@ -126,7 +145,7 @@ export function HomePage() {
     setIsProcessing(true);
     try {
       // 使用用户输入的 prompt，如果没有则使用默认 prompt
-      const customPrompt = promptInput.trim() || defaultAnalysisPrompt;
+      const customPrompt = promptInput.trim() || deepAnalysisPrompt;
 
       let savedNote: Note;
 
@@ -157,7 +176,7 @@ export function HomePage() {
     } finally {
       setIsProcessing(false);
     }
-  }, [noteContent, promptInput, defaultAnalysisPrompt, linkedNote, createNote, updateNote]);
+  }, [noteContent, promptInput, deepAnalysisPrompt, linkedNote, createNote, updateNote]);
 
   return (
     <div className="h-full flex flex-col">
@@ -275,22 +294,60 @@ export function HomePage() {
         {/* 左侧：编辑区 */}
         <div className="flex-1 flex flex-col p-4 border-r">
           {/* 笔记内容编辑区 */}
-          <div className="flex-1 flex flex-col">
-            <div className="flex items-center gap-2 mb-2 text-sm text-muted-foreground">
-              <FileText className="h-4 w-4" />
-              <span>笔记内容</span>
-              {linkedNote && (
-                <Badge variant="secondary" className="text-xs">
-                  #{linkedNote.id}
-                </Badge>
-              )}
+          <div className="flex-1 flex flex-col min-h-0">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <FileText className="h-4 w-4" />
+                <span>笔记内容</span>
+                {linkedNote && (
+                  <Badge variant="secondary" className="text-xs">
+                    #{linkedNote.id}
+                  </Badge>
+                )}
+                <Badge variant="outline" className="text-xs">Markdown</Badge>
+              </div>
+              <div className="flex items-center gap-1">
+                <Button
+                  variant={editorMode === 'edit' ? 'default' : 'ghost'}
+                  size="sm"
+                  className="h-7 px-2"
+                  onClick={() => setEditorMode('edit')}
+                  title="仅编辑"
+                >
+                  <Edit3 className="h-3 w-3" />
+                </Button>
+                <Button
+                  variant={editorMode === 'live' ? 'default' : 'ghost'}
+                  size="sm"
+                  className="h-7 px-2"
+                  onClick={() => setEditorMode('live')}
+                  title="实时预览"
+                >
+                  <Edit3 className="h-3 w-3 mr-1" />
+                  <Eye className="h-3 w-3" />
+                </Button>
+                <Button
+                  variant={editorMode === 'preview' ? 'default' : 'ghost'}
+                  size="sm"
+                  className="h-7 px-2"
+                  onClick={() => setEditorMode('preview')}
+                  title="仅预览"
+                >
+                  <Eye className="h-3 w-3" />
+                </Button>
+              </div>
             </div>
-            <Textarea
-              value={noteContent}
-              onChange={(e) => setNoteContent(e.target.value)}
-              placeholder="在这里输入笔记内容..."
-              className="flex-1 min-h-[200px] resize-none font-mono"
-            />
+            <div className="flex-1 min-h-[200px]" data-color-mode="light">
+              <MDEditor
+                value={noteContent}
+                onChange={(val) => setNoteContent(val || '')}
+                preview={editorMode}
+                height="100%"
+                textareaProps={{
+                  placeholder: '在这里输入笔记内容...\n\n支持 Markdown 格式：\n- **粗体** 文本\n- *斜体* 文本\n- `代码` 片段\n- 列表和更多',
+                }}
+              />
+            </div>
           </div>
 
           {/* AI 提示词输入区 */}
@@ -321,35 +378,40 @@ export function HomePage() {
           </div>
 
           {/* 操作按钮 */}
-          <div className="mt-4 flex items-center gap-2">
-            <Button
-              onClick={handleSave}
-              disabled={!noteContent.trim() || isSaving || isProcessing}
-              variant="outline"
-            >
-              {isSaving ? (
-                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-              ) : (
-                <Save className="h-4 w-4 mr-1" />
+          <div className="mt-4 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Button
+                onClick={handleSave}
+                disabled={!noteContent.trim() || isSaving || isProcessing}
+                variant="outline"
+              >
+                {isSaving ? (
+                  <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                ) : (
+                  <Save className="h-4 w-4 mr-1" />
+                )}
+                {linkedNote ? '更新' : '保存'}
+              </Button>
+              <Button
+                onClick={handleAnalyze}
+                disabled={!noteContent.trim() || isProcessing}
+              >
+                {isProcessing ? (
+                  <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                ) : (
+                  <BrainCircuit className="h-4 w-4 mr-1" />
+                )}
+                分析
+              </Button>
+              {linkedNote && (
+                <span className="text-xs text-muted-foreground ml-2">
+                  上次更新：{new Date(linkedNote.updated_at).toLocaleString('zh-CN')}
+                </span>
               )}
-              {linkedNote ? '更新' : '保存'}
-            </Button>
-            <Button
-              onClick={handleAnalyze}
-              disabled={!noteContent.trim() || isProcessing}
-            >
-              {isProcessing ? (
-                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-              ) : (
-                <BrainCircuit className="h-4 w-4 mr-1" />
-              )}
-              分析
-            </Button>
-            {linkedNote && (
-              <span className="text-xs text-muted-foreground ml-2">
-                上次更新：{new Date(linkedNote.updated_at).toLocaleString('zh-CN')}
-              </span>
-            )}
+            </div>
+            <div className="text-xs text-muted-foreground">
+              {noteContent.length} 字符 · ⌘S 保存
+            </div>
           </div>
         </div>
 

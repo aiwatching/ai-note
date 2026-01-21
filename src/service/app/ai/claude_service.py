@@ -10,6 +10,9 @@ from loguru import logger
 from .base import AIServiceBase
 from .prompts import (
     ANALYZE_NOTE_PROMPT,
+    DEEP_ANALYZE_NOTE_PROMPT,
+    DEFAULT_CATEGORIES,
+    DEFAULT_DOMAINS,
     SEMANTIC_SEARCH_PROMPT,
     EXTRACT_TODOS_PROMPT,
     EXTRACT_SCHEDULE_PROMPT,
@@ -29,6 +32,159 @@ class ClaudeService(AIServiceBase):
         """
         self.client = anthropic.Anthropic(api_key=api_key)
         self.model = model
+
+    async def deep_analyze_note(
+        self,
+        content: str,
+        current_date: str,
+        categories: Optional[List[str]] = None,
+        domains: Optional[List[str]] = None,
+        custom_prompt: Optional[str] = None,
+    ) -> Dict:
+        """Perform deep analysis on note content using Claude."""
+        cats = categories or DEFAULT_CATEGORIES
+        doms = domains or DEFAULT_DOMAINS
+
+        if custom_prompt:
+            prompt = custom_prompt.format(
+                content=content,
+                current_date=current_date,
+                categories=", ".join(cats),
+                domains=", ".join(doms),
+            )
+        else:
+            prompt = DEEP_ANALYZE_NOTE_PROMPT.format(
+                content=content,
+                current_date=current_date,
+                categories=", ".join(cats),
+                domains=", ".join(doms),
+            )
+
+        try:
+            message = self.client.messages.create(
+                model=self.model,
+                max_tokens=4096,
+                messages=[{"role": "user", "content": prompt}],
+            )
+
+            result_text = message.content[0].text
+            result = self._extract_json(result_text)
+
+            return self._normalize_deep_analysis_result(result)
+
+        except anthropic.APIError as e:
+            logger.error(f"Claude API error during deep analysis: {e}")
+            return self._default_deep_analysis_result()
+
+    def _normalize_deep_analysis_result(self, result: Dict) -> Dict:
+        """Normalize and validate deep analysis result."""
+        basic = result.get("basic_info", {})
+        entities = result.get("entities", {})
+        topic = result.get("topic_analysis", {})
+        time_info = result.get("time_info", {})
+        relation = result.get("relation_signals", {})
+        features = result.get("content_features", {})
+        priority = result.get("priority_assessment", {})
+
+        return {
+            "basic_info": {
+                "title": basic.get("title"),
+                "category": basic.get("category"),
+                "subcategory": basic.get("subcategory"),
+                "summary": basic.get("summary"),
+            },
+            "entities": {
+                "persons": entities.get("persons", []) or [],
+                "companies": entities.get("companies", []) or [],
+                "projects": entities.get("projects", []) or [],
+                "locations": entities.get("locations", []) or [],
+                "technical_terms": entities.get("technical_terms", []) or [],
+            },
+            "topic_analysis": {
+                "core_topic": topic.get("core_topic"),
+                "keywords": topic.get("keywords", []) or [],
+                "domain": topic.get("domain"),
+            },
+            "time_info": {
+                "event_times": time_info.get("event_times", []) or [],
+                "deadlines": time_info.get("deadlines", []) or [],
+                "follow_up_dates": time_info.get("follow_up_dates", []) or [],
+            },
+            "relation_signals": {
+                "is_follow_up": bool(relation.get("is_follow_up", False)),
+                "is_summary": bool(relation.get("is_summary", False)),
+                "is_standalone": bool(relation.get("is_standalone", True)),
+                "reference_keywords": relation.get("reference_keywords", []) or [],
+                "continuation_topic": relation.get("continuation_topic"),
+            },
+            "content_features": {
+                "intent": features.get("intent"),
+                "content_type": features.get("content_type"),
+                "has_todos": bool(features.get("has_todos", False)),
+                "has_questions": bool(features.get("has_questions", False)),
+                "has_decisions": bool(features.get("has_decisions", False)),
+                "urgency": features.get("urgency", "normal"),
+            },
+            "priority_assessment": {
+                "priority": priority.get("priority", "medium"),
+                "urgency_score": float(priority.get("urgency_score", 0.5)),
+                "importance_score": float(priority.get("importance_score", 0.5)),
+                "reason": priority.get("reason"),
+            },
+            "action_suggestions": result.get("action_suggestions", []) or [],
+            "key_points": result.get("key_points", []) or [],
+        }
+
+    def _default_deep_analysis_result(self) -> Dict:
+        """Return default deep analysis result on error."""
+        return {
+            "basic_info": {
+                "title": None,
+                "category": "个人杂记",
+                "subcategory": None,
+                "summary": None,
+            },
+            "entities": {
+                "persons": [],
+                "companies": [],
+                "projects": [],
+                "locations": [],
+                "technical_terms": [],
+            },
+            "topic_analysis": {
+                "core_topic": None,
+                "keywords": [],
+                "domain": None,
+            },
+            "time_info": {
+                "event_times": [],
+                "deadlines": [],
+                "follow_up_dates": [],
+            },
+            "relation_signals": {
+                "is_follow_up": False,
+                "is_summary": False,
+                "is_standalone": True,
+                "reference_keywords": [],
+                "continuation_topic": None,
+            },
+            "content_features": {
+                "intent": None,
+                "content_type": None,
+                "has_todos": False,
+                "has_questions": False,
+                "has_decisions": False,
+                "urgency": "normal",
+            },
+            "priority_assessment": {
+                "priority": "medium",
+                "urgency_score": 0.5,
+                "importance_score": 0.5,
+                "reason": None,
+            },
+            "action_suggestions": [],
+            "key_points": [],
+        }
 
     def _extract_json(self, text: str) -> Dict:
         """Extract JSON from text that might contain markdown code blocks."""

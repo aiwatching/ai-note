@@ -7,6 +7,30 @@ class AIServiceBase(ABC):
     """AI service abstract base class."""
 
     @abstractmethod
+    async def deep_analyze_note(
+        self,
+        content: str,
+        current_date: str,
+        categories: Optional[List[str]] = None,
+        domains: Optional[List[str]] = None,
+        custom_prompt: Optional[str] = None,
+    ) -> Dict:
+        """
+        Perform deep analysis on note content.
+
+        Args:
+            content: Raw note content
+            current_date: Current date string for relative time conversion
+            categories: Custom category list
+            domains: Custom domain list
+            custom_prompt: Optional custom prompt to override default
+
+        Returns:
+            Comprehensive analysis result with all extracted information
+        """
+        pass
+
+    @abstractmethod
     async def analyze_note(
         self, content: str, context: Optional[Dict] = None, custom_prompt: Optional[str] = None
     ) -> Dict:

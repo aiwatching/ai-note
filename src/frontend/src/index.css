@@ -82,3 +82,74 @@
   background-color: hsl(var(--background)) !important;
   color: hsl(var(--foreground)) !important;
 }
+
+/* Markdown editor in Home page */
+.w-md-editor {
+  border-radius: var(--radius) !important;
+  border: 1px solid hsl(var(--border)) !important;
+}
+
+.w-md-editor-text-pre > code,
+.w-md-editor-text-input {
+  font-size: 14px !important;
+  line-height: 1.6 !important;
+}
+
+.w-md-editor-toolbar li > button {
+  height: 28px !important;
+  width: 28px !important;
+}
+
+.w-md-editor-toolbar li > button svg {
+  width: 14px !important;
+  height: 14px !important;
+}
+
+/* Preview styling */
+.wmde-markdown h1,
+.wmde-markdown h2,
+.wmde-markdown h3,
+.wmde-markdown h4 {
+  border-bottom: none !important;
+  margin-top: 1em !important;
+  margin-bottom: 0.5em !important;
+}
+
+.wmde-markdown code {
+  background-color: hsl(var(--muted)) !important;
+  padding: 0.2em 0.4em !important;
+  border-radius: 3px !important;
+  font-size: 85% !important;
+}
+
+.wmde-markdown pre {
+  background-color: hsl(var(--muted)) !important;
+  border-radius: var(--radius) !important;
+  padding: 1em !important;
+}
+
+.wmde-markdown blockquote {
+  border-left: 4px solid hsl(var(--primary)) !important;
+  padding-left: 1em !important;
+  color: hsl(var(--muted-foreground)) !important;
+}
+
+.wmde-markdown ul,
+.wmde-markdown ol {
+  padding-left: 2em !important;
+}
+
+.wmde-markdown table {
+  border-collapse: collapse !important;
+  width: 100% !important;
+}
+
+.wmde-markdown th,
+.wmde-markdown td {
+  border: 1px solid hsl(var(--border)) !important;
+  padding: 0.5em 1em !important;
+}
+
+.wmde-markdown th {
+  background-color: hsl(var(--muted)) !important;
+}

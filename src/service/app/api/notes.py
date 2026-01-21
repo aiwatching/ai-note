@@ -228,3 +228,98 @@ async def delete_all_notes(
     count = service.delete_all_notes(user_id, hard_delete=hard_delete)
 
     return {"message": f"Deleted {count} notes", "count": count}
+
+
+@router.get("/{note_id}/related")
+async def get_related_notes(
+    note_id: int,
+    min_score: float = Query(0.2, ge=0, le=1, description="Minimum relation score"),
+    limit: int = Query(10, ge=1, le=50, description="Maximum related notes to return"),
+    db: Session = Depends(get_db),
+):
+    """
+    Get notes related to a specific note.
+
+    Returns notes with similar entities, topics, or temporal proximity.
+    Each result includes the relation type and score.
+    """
+    user_id = get_or_create_default_user(db)
+    service = NoteService(db)
+
+    note = service.get_note(note_id, user_id)
+    if not note:
+        raise HTTPException(status_code=404, detail="Note not found")
+
+    related = service.get_related_notes(note_id, user_id, min_score, limit)
+
+    return {"note_id": note_id, "related_notes": related}
+
+
+@router.get("/{note_id}/entities")
+async def get_note_entities(
+    note_id: int,
+    db: Session = Depends(get_db),
+):
+    """
+    Get entities (persons, companies, projects, etc.) associated with a note.
+
+    Entities are extracted during AI analysis and standardized across notes.
+    """
+    user_id = get_or_create_default_user(db)
+    service = NoteService(db)
+
+    note = service.get_note(note_id, user_id)
+    if not note:
+        raise HTTPException(status_code=404, detail="Note not found")
+
+    entities = service.get_note_entities(note_id)
+
+    return {"note_id": note_id, "entities": entities}
+
+
+@router.get("/{note_id}/full")
+async def get_note_with_relations(
+    note_id: int,
+    db: Session = Depends(get_db),
+):
+    """
+    Get note with all related data including entities and related notes.
+
+    This is a comprehensive view for detailed note inspection.
+    """
+    user_id = get_or_create_default_user(db)
+    service = NoteService(db)
+
+    result = service.get_note_with_relations(note_id, user_id)
+    if not result:
+        raise HTTPException(status_code=404, detail="Note not found")
+
+    note = result["note"]
+
+    return {
+        "note": {
+            "id": note.id,
+            "title": note.title,
+            "raw_content": note.raw_content,
+            "category": note.category,
+            "subcategory": note.subcategory,
+            "domain": note.domain,
+            "tags": note.tags,
+            "keywords": note.keywords,
+            "summary": note.summary,
+            "core_topic": note.core_topic,
+            "is_todo": note.is_todo,
+            "is_schedule": note.is_schedule,
+            "is_follow_up": note.is_follow_up,
+            "priority": note.priority,
+            "urgency": note.urgency,
+            "status": note.status,
+            "key_points": note.key_points,
+            "action_suggestions": note.action_suggestions,
+            "time_info": note.time_info,
+            "created_at": note.created_at,
+            "updated_at": note.updated_at,
+        },
+        "entities": result["entities"],
+        "related_notes": result["related_notes"],
+    }
