@@ -72,7 +72,12 @@ export function NotesPage() {
   };
 
   const handleEdit = () => {
-    navigate('/');
+    // 传递 note id 到 Home 页面进行编辑
+    if (currentNote) {
+      navigate('/', { state: { editNoteId: currentNote.id } });
+    } else {
+      navigate('/');
+    }
   };
 
   const handleDelete = async () => {

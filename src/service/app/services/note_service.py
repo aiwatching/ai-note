@@ -92,7 +92,10 @@ class NoteService:
         analysis_result = None
         if self.ai_service:
             try:
-                analysis = await self.ai_service.analyze_note(note_data.content)
+                analysis = await self.ai_service.analyze_note(
+                    note_data.content,
+                    custom_prompt=note_data.custom_prompt
+                )
                 analysis_result = AIAnalysisResult(**analysis)
 
                 # Update note with analysis results
@@ -234,7 +237,10 @@ class NoteService:
             # Re-analyze if requested
             if note_data.reanalyze and self.ai_service:
                 try:
-                    analysis = await self.ai_service.analyze_note(note_data.content)
+                    analysis = await self.ai_service.analyze_note(
+                        note_data.content,
+                        custom_prompt=note_data.custom_prompt
+                    )
                     analysis_result = AIAnalysisResult(**analysis)
 
                     note.title = analysis.get("title")

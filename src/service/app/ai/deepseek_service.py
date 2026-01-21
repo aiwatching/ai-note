@@ -80,10 +80,33 @@ class DeepSeekService(AIServiceBase):
             return {}
 
     async def analyze_note(
-        self, content: str, context: Optional[Dict] = None
+        self, content: str, context: Optional[Dict] = None, custom_prompt: Optional[str] = None
     ) -> Dict:
         """Analyze note content using DeepSeek."""
-        prompt = ANALYZE_NOTE_PROMPT.format(content=content)
+        if custom_prompt:
+            # 使用自定义 prompt，并附加 JSON 输出要求
+            prompt = f"""{custom_prompt}
+
+以下是要分析的内容：
+---
+{content}
+---
+
+请以 JSON 格式返回分析结果，包含以下字段：
+{{
+    "title": "简洁的标题",
+    "category": "分类（工作笔记/学习笔记/生活记录/想法灵感/会议记录/项目文档/其他）",
+    "subcategory": "子分类（可选）",
+    "tags": ["标签1", "标签2"],
+    "summary": "内容摘要",
+    "is_todo": false,
+    "is_schedule": false,
+    "priority": "medium",
+    "entities": {{"persons": [], "dates": [], "locations": []}},
+    "suggested_actions": []
+}}"""
+        else:
+            prompt = ANALYZE_NOTE_PROMPT.format(content=content)
 
         try:
             result_text = self._make_request(

@@ -83,8 +83,81 @@
 
 ---
 
+## 已实现功能
+
+### Agent 框架 (v1.0)
+
+已完成基础 Agent 框架的搭建：
+
+```
+src/service/app/agents/
+├── __init__.py        # 模块导出
+├── base.py            # BaseAgent 抽象基类
+├── event_bus.py       # 事件总线，支持发布-订阅模式
+├── scheduler.py       # MasterScheduler 主调度器
+├── schedule_agent.py  # 日程管理 Agent
+└── content_agent.py   # 内容整理 Agent
+```
+
+#### 核心功能
+
+1. **BaseAgent 基类**
+   - 异步任务循环
+   - 生命周期管理 (start/stop/pause/resume)
+   - 状态监控和错误处理
+   - 元数据存储
+
+2. **EventBus 事件总线**
+   - 发布-订阅模式
+   - 异步事件处理
+   - 事件历史记录
+   - 支持多种事件类型
+
+3. **MasterScheduler 主调度器**
+   - Agent 注册和管理
+   - 健康监控和自动重启
+   - 系统级事件广播
+
+4. **Schedule Agent**
+   - 日程提醒发送
+   - 冲突检测
+   - 时间槽建议
+
+5. **Content Agent**
+   - 笔记相似度分析
+   - 相关笔记推荐
+   - 标签优化建议
+   - 每日摘要生成
+
+#### API 端点
+
+| 端点 | 方法 | 说明 |
+|------|------|------|
+| `/api/v1/agents/status` | GET | 获取 Agent 系统状态 |
+| `/api/v1/agents/start` | POST | 启动 Agent 系统 |
+| `/api/v1/agents/stop` | POST | 停止 Agent 系统 |
+| `/api/v1/agents/agents/{name}/start` | POST | 启动指定 Agent |
+| `/api/v1/agents/agents/{name}/stop` | POST | 停止指定 Agent |
+| `/api/v1/agents/events/history` | GET | 获取事件历史 |
+| `/api/v1/agents/schedule/upcoming` | GET | 获取即将到来的日程 |
+| `/api/v1/agents/content/related/{id}` | GET | 获取相关笔记 |
+| `/api/v1/agents/content/tags` | GET | 获取标签统计 |
+
+#### 配置项
+
+在 `.env` 文件中添加：
+
+```env
+AUTO_START_AGENTS=false          # 是否自动启动 Agent
+AGENT_SCHEDULE_INTERVAL=60       # Schedule Agent 检查间隔(秒)
+AGENT_CONTENT_INTERVAL=300       # Content Agent 分析间隔(秒)
+```
+
+---
+
 ## 更新记录
 
 | 日期 | 更新内容 |
 |------|----------|
 | 2026-01-20 | 初始化文档，添加 Agent 系统规划 |
+| 2026-01-20 | 完成 Agent 框架基础实现 |

@@ -3,14 +3,32 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Trash2, AlertTriangle, Loader2 } from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea';
+import { Trash2, AlertTriangle, Loader2, RotateCcw, Save } from 'lucide-react';
 import { noteService } from '@/services/noteService';
 import { useConversationStore } from '@/store/conversationStore';
+import { useSettingsStore, DEFAULT_ANALYSIS_PROMPT } from '@/store/settingsStore';
 
 export function SettingsPage() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteResult, setDeleteResult] = useState<string | null>(null);
+  const [promptSaved, setPromptSaved] = useState(false);
   const { conversations } = useConversationStore();
+  const { defaultAnalysisPrompt, setDefaultAnalysisPrompt, resetToDefaults } = useSettingsStore();
+  const [editingPrompt, setEditingPrompt] = useState(defaultAnalysisPrompt);
+
+  // 保存默认 prompt
+  const handleSavePrompt = () => {
+    setDefaultAnalysisPrompt(editingPrompt);
+    setPromptSaved(true);
+    setTimeout(() => setPromptSaved(false), 2000);
+  };
+
+  // 重置为默认 prompt
+  const handleResetPrompt = () => {
+    setEditingPrompt(DEFAULT_ANALYSIS_PROMPT);
+    setDefaultAnalysisPrompt(DEFAULT_ANALYSIS_PROMPT);
+  };
 
   // 清空所有 notes（软删除）
   const handleDeleteAllNotes = async () => {
@@ -102,6 +120,40 @@ export function SettingsPage() {
                 value="************************"
               />
             </div>
+          </CardContent>
+        </Card>
+
+        {/* Default Analysis Prompt */}
+        <Card>
+          <CardHeader>
+            <CardTitle>默认分析 Prompt</CardTitle>
+            <CardDescription>
+              当直接点击分析按钮时使用的默认提示词
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Textarea
+              value={editingPrompt}
+              onChange={(e) => setEditingPrompt(e.target.value)}
+              placeholder="输入默认分析提示词..."
+              className="min-h-[200px] font-mono text-sm"
+            />
+            <div className="flex items-center gap-2">
+              <Button onClick={handleSavePrompt} size="sm">
+                <Save className="h-4 w-4 mr-1" />
+                保存
+              </Button>
+              <Button onClick={handleResetPrompt} variant="outline" size="sm">
+                <RotateCcw className="h-4 w-4 mr-1" />
+                恢复默认
+              </Button>
+              {promptSaved && (
+                <span className="text-sm text-green-600">已保存</span>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              提示：在 Home 页面如果不填写特殊指令直接点击"分析"，将使用此默认 prompt
+            </p>
           </CardContent>
         </Card>
 

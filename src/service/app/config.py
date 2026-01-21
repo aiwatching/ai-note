@@ -44,6 +44,11 @@ class Settings(BaseSettings):
     # CORS
     cors_origins: str = "http://localhost:5173,http://localhost:3000"
 
+    # Agent System
+    auto_start_agents: bool = False  # Set to True to auto-start agents on app startup
+    agent_schedule_interval: int = 60  # Schedule agent check interval in seconds
+    agent_content_interval: int = 300  # Content agent analysis interval in seconds
+
     @property
     def cors_origins_list(self) -> List[str]:
         """Parse CORS origins string to list."""

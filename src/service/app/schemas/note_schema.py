@@ -24,6 +24,7 @@ class NoteCreate(BaseModel):
     """Schema for creating a note."""
 
     content: str = Field(..., min_length=1, description="Note content in Markdown format")
+    custom_prompt: Optional[str] = Field(None, description="Custom prompt for AI analysis")
 
 
 class NoteUpdate(BaseModel):
@@ -31,6 +32,7 @@ class NoteUpdate(BaseModel):
 
     content: Optional[str] = Field(None, min_length=1)
     reanalyze: bool = Field(default=False, description="Whether to re-run AI analysis")
+    custom_prompt: Optional[str] = Field(None, description="Custom prompt for AI analysis")
 
 
 class NoteResponse(BaseModel):

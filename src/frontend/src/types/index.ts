@@ -57,11 +57,13 @@ export interface NoteListResponse {
 
 export interface NoteCreate {
   content: string;
+  custom_prompt?: string;  // 自定义分析提示词
 }
 
 export interface NoteUpdate {
   content?: string;
   reanalyze?: boolean;
+  custom_prompt?: string;  // 自定义分析提示词
 }
 
 // Todo types

@@ -8,7 +8,7 @@ class AIServiceBase(ABC):
 
     @abstractmethod
     async def analyze_note(
-        self, content: str, context: Optional[Dict] = None
+        self, content: str, context: Optional[Dict] = None, custom_prompt: Optional[str] = None
     ) -> Dict:
         """
         Analyze note content and extract structured information.
@@ -16,6 +16,7 @@ class AIServiceBase(ABC):
         Args:
             content: Raw note content
             context: Additional context (user preferences, historical categories, etc.)
+            custom_prompt: Custom prompt for analysis (if provided, will be used instead of default)
 
         Returns:
             dict: {
