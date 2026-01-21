@@ -11,7 +11,6 @@ from ..ai.prompts import DEFAULT_CATEGORIES, DEFAULT_DOMAINS
 from ..config import get_settings
 from ..models.note import Note
 from ..schemas.note_schema import AIAnalysisResult, NoteCreate, NoteUpdate
-from ..storage.markdown_storage import MarkdownStorage
 from .entity_service import EntityService
 from .relation_service import RelationService
 
@@ -22,7 +21,6 @@ class NoteService:
     def __init__(self, db: Session):
         """Initialize note service."""
         self.db = db
-        self.markdown_storage = MarkdownStorage()
         self._ai_service = None
         self._entity_service = None
         self._relation_service = None
@@ -153,7 +151,7 @@ class NoteService:
         Returns:
             Tuple of (Note, analysis result dict)
         """
-        # Create note in database
+        # Create note in database (all content stored in DB, no file storage needed)
         note = Note(
             user_id=user_id,
             raw_content=note_data.content,
@@ -163,22 +161,17 @@ class NoteService:
         self.db.commit()
         self.db.refresh(note)
 
-        # Save raw markdown file
-        raw_metadata = {
-            "id": note.id,
-            "user_id": user_id,
-            "created_at": note.created_at.isoformat(),
-        }
-        raw_file_path = self.markdown_storage.save_raw(
-            note.id, note_data.content, raw_metadata
-        )
-        note.raw_file_path = raw_file_path
-
         # Run deep AI analysis if service is available
         analysis_result = None
         if self.ai_service:
             try:
                 current_date = datetime.now().strftime("%Y-%m-%d %H:%M")
+                # Debug: Log the content being sent to AI
+                logger.info(f"=== Sending to AI ===")
+                logger.info(f"Content length: {len(note_data.content)} chars")
+                logger.info(f"Content preview: {note_data.content[:200]}...")
+                logger.info(f"Custom prompt: {note_data.custom_prompt}")
+
                 analysis = await self.ai_service.deep_analyze_note(
                     content=note_data.content,
                     current_date=current_date,
@@ -188,22 +181,23 @@ class NoteService:
                 )
                 analysis_result = analysis
 
+                # Debug: Print analysis result
+                logger.info(f"=== AI Analysis Result for Note {note.id} ===")
+                logger.info(f"Title: {analysis.get('basic_info', {}).get('title')}")
+                logger.info(f"Category: {analysis.get('basic_info', {}).get('category')}")
+                logger.info(f"Summary: {analysis.get('basic_info', {}).get('summary')}")
+                logger.info(f"Keywords: {analysis.get('topic_analysis', {}).get('keywords')}")
+                logger.info(f"Domain: {analysis.get('topic_analysis', {}).get('domain')}")
+                logger.info(f"Entities: {analysis.get('entities', {})}")
+                logger.info(f"Time Info: {analysis.get('time_info', {})}")
+                logger.info(f"Priority: {analysis.get('priority_assessment', {})}")
+                logger.info(f"Key Points: {analysis.get('key_points', [])}")
+                logger.info(f"Action Suggestions: {analysis.get('action_suggestions', [])}")
+                logger.debug(f"Full Analysis: {analysis}")
+                logger.info("=== End Analysis Result ===")
+
                 # Apply analysis results to note
                 self._apply_deep_analysis_to_note(note, analysis)
-
-                # Generate and save organized content
-                organized_content = self._generate_organized_content(
-                    note_data.content, analysis
-                )
-                organized_metadata = {
-                    **raw_metadata,
-                    "analysis": analysis,
-                    "organized_at": datetime.now().isoformat(),
-                }
-                organized_file_path = self.markdown_storage.save_organized(
-                    note.id, organized_content, organized_metadata
-                )
-                note.organized_file_path = organized_file_path
 
                 # Process entities from analysis
                 try:
@@ -343,18 +337,11 @@ class NoteService:
         if note_data.content:
             note.raw_content = note_data.content
 
-            # Update raw file
-            if note.raw_file_path:
-                self.markdown_storage.update(
-                    note.raw_file_path,
-                    note_data.content,
-                    {"id": note.id, "user_id": user_id, "updated_at": datetime.now().isoformat()},
-                )
-
             # Re-analyze if requested
             if note_data.reanalyze and self.ai_service:
                 try:
                     current_date = datetime.now().strftime("%Y-%m-%d %H:%M")
+                    logger.info(f"Re-analyzing note {note_id}...")
                     analysis = await self.ai_service.deep_analyze_note(
                         content=note_data.content,
                         current_date=current_date,
@@ -363,6 +350,16 @@ class NoteService:
                         custom_prompt=note_data.custom_prompt,
                     )
                     analysis_result = analysis
+
+                    # Debug: Print re-analysis result
+                    logger.info(f"=== AI Re-Analysis Result for Note {note_id} ===")
+                    logger.info(f"Title: {analysis.get('basic_info', {}).get('title')}")
+                    logger.info(f"Category: {analysis.get('basic_info', {}).get('category')}")
+                    logger.info(f"Summary: {analysis.get('basic_info', {}).get('summary')}")
+                    logger.info(f"Keywords: {analysis.get('topic_analysis', {}).get('keywords')}")
+                    logger.info(f"Entities: {analysis.get('entities', {})}")
+                    logger.info(f"Key Points: {analysis.get('key_points', [])}")
+                    logger.info("=== End Re-Analysis Result ===")
 
                     # Apply analysis results
                     self._apply_deep_analysis_to_note(note, analysis)

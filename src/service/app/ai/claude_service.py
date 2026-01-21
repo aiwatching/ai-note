@@ -46,12 +46,24 @@ class ClaudeService(AIServiceBase):
         doms = domains or DEFAULT_DOMAINS
 
         if custom_prompt:
-            prompt = custom_prompt.format(
-                content=content,
-                current_date=current_date,
-                categories=", ".join(cats),
-                domains=", ".join(doms),
-            )
+            # Check if it's a full template (has {content}) or just an instruction
+            if "{content}" in custom_prompt:
+                # Full template - use string replace to avoid issues with JSON braces
+                prompt = custom_prompt
+                prompt = prompt.replace("{content}", content)
+                prompt = prompt.replace("{current_date}", current_date)
+                prompt = prompt.replace("{categories}", ", ".join(cats))
+                prompt = prompt.replace("{domains}", ", ".join(doms))
+            else:
+                # Short instruction - use default template but add the instruction
+                logger.info(f"Custom prompt is a short instruction: {custom_prompt[:50]}...")
+                base_prompt = DEEP_ANALYZE_NOTE_PROMPT.format(
+                    content=content,
+                    current_date=current_date,
+                    categories=", ".join(cats),
+                    domains=", ".join(doms),
+                )
+                prompt = f"用户额外指令：{custom_prompt}\n\n{base_prompt}"
         else:
             prompt = DEEP_ANALYZE_NOTE_PROMPT.format(
                 content=content,
@@ -59,6 +71,10 @@ class ClaudeService(AIServiceBase):
                 categories=", ".join(cats),
                 domains=", ".join(doms),
             )
+
+        # Debug: Log the prompt being sent
+        logger.debug(f"Prompt length: {len(prompt)} chars")
+        logger.debug(f"Prompt preview: {prompt[:500]}...")
 
         try:
             message = self.client.messages.create(

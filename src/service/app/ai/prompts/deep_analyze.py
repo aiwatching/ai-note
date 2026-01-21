@@ -1,6 +1,8 @@
 """Deep note analysis prompt template with comprehensive extraction."""
 
-DEEP_ANALYZE_NOTE_PROMPT = '''你是一个专业的笔记分析助手。请对以下笔记内容进行深度分析，提取所有关键信息。
+DEEP_ANALYZE_NOTE_PROMPT = '''【重要：你必须只返回 JSON，不要有任何其他文字、解释或对话】
+
+你是一个专业的笔记分析助手。请对以下笔记内容进行深度分析，提取所有关键信息。
 
 当前日期时间：{current_date}
 
@@ -9,7 +11,7 @@ DEEP_ANALYZE_NOTE_PROMPT = '''你是一个专业的笔记分析助手。请对�
 {content}
 ---
 
-请以 JSON 格式返回完整的分析结果：
+直接返回以下 JSON 格式的分析结果（不要包含任何其他文字）：
 
 {{
   "basic_info": {{

@@ -54,12 +54,24 @@ class DeepSeekService(AIServiceBase):
         doms = domains or DEFAULT_DOMAINS
 
         if custom_prompt:
-            prompt = custom_prompt.format(
-                content=content,
-                current_date=current_date,
-                categories=", ".join(cats),
-                domains=", ".join(doms),
-            )
+            # Check if it's a full template (has {content}) or just an instruction
+            if "{content}" in custom_prompt:
+                # Full template - use string replace to avoid issues with JSON braces
+                prompt = custom_prompt
+                prompt = prompt.replace("{content}", content)
+                prompt = prompt.replace("{current_date}", current_date)
+                prompt = prompt.replace("{categories}", ", ".join(cats))
+                prompt = prompt.replace("{domains}", ", ".join(doms))
+            else:
+                # Short instruction - use default template but add the instruction
+                logger.info(f"Custom prompt is a short instruction: {custom_prompt[:50]}...")
+                base_prompt = DEEP_ANALYZE_NOTE_PROMPT.format(
+                    content=content,
+                    current_date=current_date,
+                    categories=", ".join(cats),
+                    domains=", ".join(doms),
+                )
+                prompt = f"用户额外指令：{custom_prompt}\n\n{base_prompt}"
         else:
             prompt = DEEP_ANALYZE_NOTE_PROMPT.format(
                 content=content,
@@ -68,12 +80,27 @@ class DeepSeekService(AIServiceBase):
                 domains=", ".join(doms),
             )
 
+        # Debug: Log the prompt being sent
+        logger.debug(f"Prompt length: {len(prompt)} chars")
+        logger.debug(f"Prompt preview: {prompt[:500]}...")
+
         try:
+            system_message = """你是一个专业的笔记分析助手。你必须严格按照用户的要求，以 JSON 格式返回分析结果。
+重要规则：
+1. 只返回 JSON，不要有任何其他文字、解释或对话
+2. 不要问问题，直接分析提供的内容
+3. 如果内容很短或不完整，仍然要返回完整的 JSON 结构，用 null 或空数组填充未知字段
+4. 确保 JSON 格式正确，可以被解析"""
+
             result_text = self._make_request(
-                messages=[{"role": "user", "content": prompt}],
+                messages=[
+                    {"role": "system", "content": system_message},
+                    {"role": "user", "content": prompt}
+                ],
                 max_tokens=4096,
             )
 
+            logger.debug(f"DeepSeek raw response: {result_text[:500]}...")
             result = self._extract_json(result_text)
             return self._normalize_deep_analysis_result(result)
 
@@ -262,8 +289,12 @@ class DeepSeekService(AIServiceBase):
             prompt = ANALYZE_NOTE_PROMPT.format(content=content)
 
         try:
+            system_message = "你是一个笔记分析助手。必须只返回 JSON 格式的分析结果，不要有任何其他文字。"
             result_text = self._make_request(
-                messages=[{"role": "user", "content": prompt}],
+                messages=[
+                    {"role": "system", "content": system_message},
+                    {"role": "user", "content": prompt}
+                ],
                 max_tokens=2048,
             )
 
