@@ -271,7 +271,9 @@ class NoteService:
         return created_relations
 
     def _calculate_title_similarity(self, title1: str, title2: str) -> float:
-        """Calculate similarity between two titles."""
+        """Calculate similarity between two titles (supports Chinese)."""
+        import re
+
         if not title1 or not title2:
             return 0.0
 
@@ -283,15 +285,51 @@ class NoteService:
         if t1 == t2:
             return 1.0
 
-        # Word-based Jaccard similarity
-        words1 = set(t1.split())
-        words2 = set(t2.split())
+        # Extract key phrases (2-4 character combinations that appear in both)
+        def extract_key_phrases(text: str) -> set:
+            """Extract meaningful phrases from text."""
+            cleaned = ''.join(c for c in text if c.isalnum())
+            phrases = set()
+            # Extract 2, 3, 4 character phrases
+            for n in [2, 3, 4]:
+                if len(cleaned) >= n:
+                    for i in range(len(cleaned) - n + 1):
+                        phrases.add(cleaned[i:i+n])
+            return phrases
 
-        if not words1 or not words2:
+        phrases1 = extract_key_phrases(t1)
+        phrases2 = extract_key_phrases(t2)
+
+        if not phrases1 or not phrases2:
             return 0.0
 
-        intersection = len(words1 & words2)
-        union = len(words1 | words2)
+        # Find common phrases
+        common_phrases = phrases1 & phrases2
+
+        # Check for significant common phrases (3+ characters)
+        significant_common = [p for p in common_phrases if len(p) >= 3]
+
+        # If they share significant phrases, boost the similarity
+        if significant_common:
+            # Calculate coverage: how much of the shorter title is covered by common phrases
+            shorter_len = min(len(t1), len(t2))
+            # Remove duplicates by using the longest common phrase
+            max_common_len = max(len(p) for p in significant_common) if significant_common else 0
+
+            # If they share a phrase of 3+ chars, consider them related
+            # Similarity based on the length of shared content relative to title length
+            coverage = max_common_len / shorter_len if shorter_len > 0 else 0
+
+            # Boost: if they share "AI笔记" (4 chars) in titles of ~10 chars, that's significant
+            if coverage >= 0.3:  # At least 30% overlap
+                return 0.6 + (coverage * 0.4)  # 0.6 to 1.0 based on coverage
+
+        # Fallback to n-gram Jaccard similarity
+        ngrams1 = {t1[i:i+2] for i in range(len(t1) - 1)} if len(t1) >= 2 else {t1}
+        ngrams2 = {t2[i:i+2] for i in range(len(t2) - 1)} if len(t2) >= 2 else {t2}
+
+        intersection = len(ngrams1 & ngrams2)
+        union = len(ngrams1 | ngrams2)
 
         if union == 0:
             return 0.0
@@ -648,6 +686,125 @@ class NoteService:
         )
         self.db.commit()
         return deleted_count > 0
+
+    def recalculate_all_relations(self, user_id: int) -> int:
+        """
+        Recalculate title-based relations for all notes.
+
+        Returns the number of relations created.
+        """
+        # Clear existing title-based relations
+        self.db.query(NoteRelation).filter(
+            NoteRelation.user_id == user_id,
+            NoteRelation.relation_type == "same_topic"
+        ).delete(synchronize_session=False)
+        self.db.commit()
+
+        # Get all active notes
+        notes = (
+            self.db.query(Note)
+            .filter(Note.user_id == user_id, Note.status == "active")
+            .all()
+        )
+
+        total_relations = 0
+        for note in notes:
+            relations = self._build_title_based_relations(note, user_id)
+            total_relations += len(relations)
+            logger.info(f"Built {len(relations)} relations for note {note.id} ({note.title})")
+
+        return total_relations
+
+    def get_suggested_relations(
+        self, note_id: int, user_id: int, min_similarity: float = 0.2
+    ) -> List[Dict]:
+        """
+        Get suggested notes that might be related to the given note.
+
+        Returns notes with similarity score for user to decide whether to link.
+        """
+        note = self.get_note(note_id, user_id)
+        if not note or not note.title:
+            return []
+
+        # Get all other notes
+        other_notes = (
+            self.db.query(Note)
+            .filter(
+                Note.user_id == user_id,
+                Note.id != note_id,
+                Note.status == "active",
+                Note.title.isnot(None),
+            )
+            .all()
+        )
+
+        suggestions = []
+        for other in other_notes:
+            similarity = self._calculate_title_similarity(note.title, other.title)
+
+            if similarity >= min_similarity:
+                # Check if already linked
+                existing = (
+                    self.db.query(NoteRelation)
+                    .filter(
+                        or_(
+                            (NoteRelation.source_note_id == note_id) &
+                            (NoteRelation.target_note_id == other.id),
+                            (NoteRelation.source_note_id == other.id) &
+                            (NoteRelation.target_note_id == note_id),
+                        )
+                    )
+                    .first()
+                )
+
+                suggestions.append({
+                    "note_id": other.id,
+                    "title": other.title,
+                    "category": other.category,
+                    "summary": other.summary,
+                    "created_at": other.created_at.isoformat() if other.created_at else None,
+                    "similarity": round(similarity, 3),
+                    "is_linked": existing is not None,
+                })
+
+        # Sort by similarity (highest first)
+        suggestions.sort(key=lambda x: x["similarity"], reverse=True)
+
+        return suggestions
+
+    def create_manual_relation(
+        self, source_note_id: int, target_note_id: int, user_id: int
+    ) -> bool:
+        """
+        Manually create a relation between two notes.
+
+        Returns True if created, False if already exists.
+        """
+        # Check if already exists
+        existing = (
+            self.db.query(NoteRelation)
+            .filter(
+                NoteRelation.source_note_id == source_note_id,
+                NoteRelation.target_note_id == target_note_id,
+            )
+            .first()
+        )
+
+        if existing:
+            return False
+
+        relation = NoteRelation(
+            user_id=user_id,
+            source_note_id=source_note_id,
+            target_note_id=target_note_id,
+            relation_type="manual",  # User-created relation
+            relation_score=1.0,  # Max score for manual links
+        )
+        self.db.add(relation)
+        self.db.commit()
+
+        return True
 
     def get_notes_grouped_by_title(
         self,

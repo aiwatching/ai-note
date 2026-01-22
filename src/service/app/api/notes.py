@@ -401,3 +401,81 @@ async def delete_note_relation(
         return {"message": "Relation deleted successfully"}
     else:
         return {"message": "No relation found to delete"}
+
+
+@router.post("/recalculate-relations")
+async def recalculate_all_relations(
+    db: Session = Depends(get_db),
+):
+    """
+    Recalculate title-based relations for all notes.
+
+    Use this after updating notes or to refresh all relationships.
+    """
+    user_id = get_or_create_default_user(db)
+    service = NoteService(db)
+
+    count = service.recalculate_all_relations(user_id)
+
+    return {
+        "message": f"Recalculated relations successfully",
+        "relations_created": count
+    }
+
+
+@router.get("/{note_id}/suggestions")
+async def get_suggested_relations(
+    note_id: int,
+    min_similarity: float = Query(0.2, ge=0, le=1, description="Minimum similarity score"),
+    db: Session = Depends(get_db),
+):
+    """
+    Get suggested notes that might be related to this note.
+
+    Returns a list of potentially related notes with similarity scores,
+    allowing users to decide whether to create a link.
+    """
+    user_id = get_or_create_default_user(db)
+    service = NoteService(db)
+
+    note = service.get_note(note_id, user_id)
+    if not note:
+        raise HTTPException(status_code=404, detail="Note not found")
+
+    suggestions = service.get_suggested_relations(note_id, user_id, min_similarity)
+
+    return {
+        "note_id": note_id,
+        "suggestions": suggestions
+    }
+
+
+@router.post("/{note_id}/relations/{target_note_id}")
+async def create_manual_relation(
+    note_id: int,
+    target_note_id: int,
+    db: Session = Depends(get_db),
+):
+    """
+    Manually create a relationship between two notes.
+
+    Use this when you want to link notes that the system didn't automatically connect.
+    """
+    user_id = get_or_create_default_user(db)
+    service = NoteService(db)
+
+    # Verify both notes exist
+    note = service.get_note(note_id, user_id)
+    if not note:
+        raise HTTPException(status_code=404, detail="Source note not found")
+
+    target = service.get_note(target_note_id, user_id)
+    if not target:
+        raise HTTPException(status_code=404, detail="Target note not found")
+
+    created = service.create_manual_relation(note_id, target_note_id, user_id)
+
+    if created:
+        return {"message": "Relation created successfully"}
+    else:
+        return {"message": "Relation already exists"}

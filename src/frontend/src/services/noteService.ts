@@ -59,4 +59,32 @@ export const noteService = {
   async deleteRelation(noteId: number, relatedNoteId: number): Promise<void> {
     await api.delete(`/notes/${noteId}/relations/${relatedNoteId}`);
   },
+
+  async recalculateRelations(): Promise<{ message: string; relations_created: number }> {
+    const response = await api.post<{ message: string; relations_created: number }>('/notes/recalculate-relations');
+    return response.data;
+  },
+
+  async getSuggestedRelations(noteId: number, minSimilarity: number = 0.2): Promise<{
+    note_id: number;
+    suggestions: Array<{
+      note_id: number;
+      title: string;
+      category: string | null;
+      summary: string | null;
+      created_at: string;
+      similarity: number;
+      is_linked: boolean;
+    }>;
+  }> {
+    const response = await api.get(`/notes/${noteId}/suggestions`, {
+      params: { min_similarity: minSimilarity }
+    });
+    return response.data;
+  },
+
+  async createManualRelation(noteId: number, targetNoteId: number): Promise<{ message: string }> {
+    const response = await api.post<{ message: string }>(`/notes/${noteId}/relations/${targetNoteId}`);
+    return response.data;
+  },
 };

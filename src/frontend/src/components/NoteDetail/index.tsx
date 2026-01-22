@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import MDEditor from '@uiw/react-md-editor';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -12,9 +13,23 @@ import {
   Trash2,
   Edit,
   ListTodo,
+  Link2,
+  Check,
+  Loader2,
 } from 'lucide-react';
 import type { NoteDetail as NoteDetailType } from '@/types';
 import { formatDate } from '@/utils/date';
+import { noteService } from '@/services/noteService';
+
+interface Suggestion {
+  note_id: number;
+  title: string;
+  category: string | null;
+  summary: string | null;
+  created_at: string;
+  similarity: number;
+  is_linked: boolean;
+}
 
 interface NoteDetailProps {
   note: NoteDetailType;
@@ -33,7 +48,60 @@ export function NoteDetail({
   onCreateTodos,
   isLoading,
 }: NoteDetailProps) {
+  const navigate = useNavigate();
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
+  const [linkingId, setLinkingId] = useState<number | null>(null);
+
   const priorityVariant = note.priority as 'high' | 'medium' | 'low' | undefined;
+
+  // Load suggested relations
+  useEffect(() => {
+    async function loadSuggestions() {
+      setLoadingSuggestions(true);
+      try {
+        const result = await noteService.getSuggestedRelations(note.id, 0.15);
+        setSuggestions(result.suggestions);
+      } catch (error) {
+        console.error('Failed to load suggestions:', error);
+      } finally {
+        setLoadingSuggestions(false);
+      }
+    }
+    loadSuggestions();
+  }, [note.id]);
+
+  // Handle linking a note
+  const handleLink = async (targetId: number) => {
+    setLinkingId(targetId);
+    try {
+      await noteService.createManualRelation(note.id, targetId);
+      // Update local state
+      setSuggestions(prev =>
+        prev.map(s => s.note_id === targetId ? { ...s, is_linked: true } : s)
+      );
+    } catch (error) {
+      console.error('Failed to link note:', error);
+    } finally {
+      setLinkingId(null);
+    }
+  };
+
+  // Handle unlinking a note
+  const handleUnlink = async (targetId: number) => {
+    setLinkingId(targetId);
+    try {
+      await noteService.deleteRelation(note.id, targetId);
+      // Update local state
+      setSuggestions(prev =>
+        prev.map(s => s.note_id === targetId ? { ...s, is_linked: false } : s)
+      );
+    } catch (error) {
+      console.error('Failed to unlink note:', error);
+    } finally {
+      setLinkingId(null);
+    }
+  };
 
   return (
     <div className="h-full flex flex-col">
@@ -138,6 +206,96 @@ export function NoteDetail({
               </div>
             </CardContent>
           </Card>
+
+          {/* Suggested Relations */}
+          {suggestions.length > 0 && (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Link2 className="h-4 w-4" />
+                  相关笔记建议
+                  <Badge variant="secondary" className="text-xs">
+                    {suggestions.filter(s => !s.is_linked).length} 条待关联
+                  </Badge>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {loadingSuggestions ? (
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    加载中...
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {suggestions.map((suggestion) => (
+                      <div
+                        key={suggestion.note_id}
+                        className={`flex items-center justify-between p-3 rounded-md border ${
+                          suggestion.is_linked ? 'bg-green-50 border-green-200' : 'hover:bg-muted/50'
+                        }`}
+                      >
+                        <div
+                          className="flex-1 cursor-pointer"
+                          onClick={() => navigate(`/notes/${suggestion.note_id}`)}
+                        >
+                          <p className="font-medium text-sm">{suggestion.title}</p>
+                          <div className="flex items-center gap-2 mt-1">
+                            {suggestion.category && (
+                              <Badge variant="outline" className="text-xs">
+                                {suggestion.category}
+                              </Badge>
+                            )}
+                            <span className="text-xs text-muted-foreground">
+                              相似度: {(suggestion.similarity * 100).toFixed(0)}%
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              {formatDate(suggestion.created_at)}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="ml-2">
+                          {suggestion.is_linked ? (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleUnlink(suggestion.note_id)}
+                              disabled={linkingId === suggestion.note_id}
+                              className="text-green-600"
+                            >
+                              {linkingId === suggestion.note_id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <>
+                                  <Check className="h-4 w-4 mr-1" />
+                                  已关联
+                                </>
+                              )}
+                            </Button>
+                          ) : (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleLink(suggestion.note_id)}
+                              disabled={linkingId === suggestion.note_id}
+                            >
+                              {linkingId === suggestion.note_id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <>
+                                  <Link2 className="h-4 w-4 mr-1" />
+                                  关联
+                                </>
+                              )}
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
         </div>
       </div>
     </div>
