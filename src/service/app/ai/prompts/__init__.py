@@ -3,6 +3,7 @@ from .analyze import ANALYZE_NOTE_PROMPT
 from .deep_analyze import DEEP_ANALYZE_NOTE_PROMPT, DEFAULT_CATEGORIES, DEFAULT_DOMAINS
 from .search import SEMANTIC_SEARCH_PROMPT
 from .extract import EXTRACT_TODOS_PROMPT, EXTRACT_SCHEDULE_PROMPT
+from .title_extract import EXTRACT_TITLE_PROMPT
 
 __all__ = [
     "ANALYZE_NOTE_PROMPT",
@@ -12,4 +13,5 @@ __all__ = [
     "SEMANTIC_SEARCH_PROMPT",
     "EXTRACT_TODOS_PROMPT",
     "EXTRACT_SCHEDULE_PROMPT",
+    "EXTRACT_TITLE_PROMPT",
 ]

@@ -55,6 +55,29 @@ export interface NoteListResponse {
   items: Note[];
 }
 
+export interface NoteGroupItem {
+  id: number;
+  title: string | null;
+  category: string | null;
+  summary: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface NoteGroup {
+  title: string;
+  note_count: number;
+  latest_updated_at: string;
+  notes: NoteGroupItem[];
+}
+
+export interface NoteGroupedResponse {
+  total_groups: number;
+  page: number;
+  page_size: number;
+  groups: NoteGroup[];
+}
+
 export interface NoteCreate {
   content: string;
   custom_prompt?: string;  // 自定义分析提示词

@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Plus, Filter, Clock, LayoutList, CheckSquare, Calendar } from 'lucide-react';
+import { Plus, Filter, Clock, LayoutList, CheckSquare, Calendar, Layers } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { NoteList } from '@/components/NoteList';
 import { NoteDetail } from '@/components/NoteDetail';
 import { NoteTimeline } from '@/components/NoteTimeline';
+import { NoteGroupedList } from '@/components/NoteGroupedList';
 import { TodoList } from '@/components/TodoList';
 import { ScheduleList } from '@/components/ScheduleList';
 import { useNoteStore } from '@/store/noteStore';
@@ -13,20 +14,22 @@ import { useScheduleStore } from '@/store/scheduleStore';
 import { CATEGORIES } from '@/types';
 
 type TabMode = 'notes' | 'todos' | 'schedules';
-type NoteViewMode = 'timeline' | 'list';
+type NoteViewMode = 'timeline' | 'list' | 'grouped';
 
 export function NotesPage() {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [tabMode, setTabMode] = useState<TabMode>('notes');
-  const [noteViewMode, setNoteViewMode] = useState<NoteViewMode>('timeline');
+  const [noteViewMode, setNoteViewMode] = useState<NoteViewMode>('grouped');
 
   const {
     notes,
+    noteGroups,
     currentNote,
     isLoading: notesLoading,
     fetchNotes,
+    fetchNotesGrouped,
     fetchNote,
     deleteNote,
     setCurrentNote,
@@ -51,13 +54,17 @@ export function NotesPage() {
 
   useEffect(() => {
     if (tabMode === 'notes') {
-      fetchNotes({ category: selectedCategory || undefined });
+      if (noteViewMode === 'grouped') {
+        fetchNotesGrouped({ category: selectedCategory || undefined });
+      } else {
+        fetchNotes({ category: selectedCategory || undefined });
+      }
     } else if (tabMode === 'todos') {
       fetchTodos();
     } else if (tabMode === 'schedules') {
       fetchSchedules();
     }
-  }, [tabMode, fetchNotes, fetchTodos, fetchSchedules, selectedCategory]);
+  }, [tabMode, noteViewMode, fetchNotes, fetchNotesGrouped, fetchTodos, fetchSchedules, selectedCategory]);
 
   useEffect(() => {
     if (id) {
@@ -161,10 +168,21 @@ export function NotesPage() {
           {tabMode === 'notes' && (
             <div className="flex items-center border rounded-md">
               <Button
-                variant={noteViewMode === 'timeline' ? 'default' : 'ghost'}
+                variant={noteViewMode === 'grouped' ? 'default' : 'ghost'}
                 size="sm"
                 className="rounded-r-none"
+                onClick={() => setNoteViewMode('grouped')}
+                title="按主题分组"
+              >
+                <Layers className="h-4 w-4 mr-1" />
+                分组
+              </Button>
+              <Button
+                variant={noteViewMode === 'timeline' ? 'default' : 'ghost'}
+                size="sm"
+                className="rounded-none border-l"
                 onClick={() => setNoteViewMode('timeline')}
+                title="时间轴视图"
               >
                 <Clock className="h-4 w-4 mr-1" />
                 时间轴
@@ -172,8 +190,9 @@ export function NotesPage() {
               <Button
                 variant={noteViewMode === 'list' ? 'default' : 'ghost'}
                 size="sm"
-                className="rounded-l-none"
+                className="rounded-l-none border-l"
                 onClick={() => setNoteViewMode('list')}
+                title="列表视图"
               >
                 <LayoutList className="h-4 w-4 mr-1" />
                 列表
@@ -242,7 +261,9 @@ export function NotesPage() {
       {/* Content */}
       <div className="flex-1 overflow-auto p-4">
         {tabMode === 'notes' && (
-          noteViewMode === 'timeline' ? (
+          noteViewMode === 'grouped' ? (
+            <NoteGroupedList groups={noteGroups} isLoading={notesLoading} />
+          ) : noteViewMode === 'timeline' ? (
             <NoteTimeline notes={notes} isLoading={notesLoading} />
           ) : (
             <NoteList notes={notes} isLoading={notesLoading} />

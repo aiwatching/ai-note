@@ -16,6 +16,7 @@ from .prompts import (
     SEMANTIC_SEARCH_PROMPT,
     EXTRACT_TODOS_PROMPT,
     EXTRACT_SCHEDULE_PROMPT,
+    EXTRACT_TITLE_PROMPT,
 )
 
 
@@ -489,3 +490,36 @@ class DeepSeekService(AIServiceBase):
             "participants": schedule.get("participants", []),
             "is_all_day": schedule.get("is_all_day", False),
         }
+
+    async def extract_title(
+        self, content: str, categories: Optional[List[str]] = None
+    ) -> Dict:
+        """Extract title/core topic from note content (simplified analysis)."""
+        cats = categories or DEFAULT_CATEGORIES
+        prompt = EXTRACT_TITLE_PROMPT.replace("{content}", content)
+        prompt = prompt.replace("{categories}", ", ".join(cats))
+
+        try:
+            system_message = "你是一个笔记分析助手。只返回 JSON 格式的结果，不要有任何其他文字。"
+            result_text = self._make_request(
+                messages=[
+                    {"role": "system", "content": system_message},
+                    {"role": "user", "content": prompt}
+                ],
+                max_tokens=512,
+            )
+
+            result = self._extract_json(result_text)
+            return {
+                "title": result.get("title"),
+                "category": result.get("category", "个人杂记"),
+                "summary": result.get("summary"),
+            }
+
+        except Exception as e:
+            logger.error(f"DeepSeek extract_title error: {e}")
+            return {
+                "title": None,
+                "category": "个人杂记",
+                "summary": None,
+            }

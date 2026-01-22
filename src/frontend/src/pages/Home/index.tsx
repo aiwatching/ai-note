@@ -354,7 +354,7 @@ export function HomePage() {
           <div className="mt-4 pt-4 border-t">
             <div className="flex items-center gap-2 mb-2 text-sm text-muted-foreground">
               <BrainCircuit className="h-4 w-4" />
-              <span>AI 指令（可选）</span>
+              <span>深度分析指令（可选，点击"深度分析"时使用）</span>
               <Button
                 variant="ghost"
                 size="sm"
@@ -368,12 +368,12 @@ export function HomePage() {
             <Textarea
               value={promptInput}
               onChange={(e) => setPromptInput(e.target.value)}
-              placeholder="输入特殊处理指令，例如：帮我提取其中的待办事项... 留空则使用默认分析"
+              placeholder="输入深度分析指令，例如：帮我提取关键要点、待办事项..."
               className="min-h-[80px] resize-none text-sm"
               rows={3}
             />
             <p className="text-xs text-muted-foreground mt-1">
-              留空点击"分析"将使用 Settings 中配置的默认 Prompt
+              "保存"会自动提取标题，"深度分析"会进行完整的 AI 分析
             </p>
           </div>
 
@@ -384,6 +384,7 @@ export function HomePage() {
                 onClick={handleSave}
                 disabled={!noteContent.trim() || isSaving || isProcessing}
                 variant="outline"
+                title="保存笔记并自动提取标题"
               >
                 {isSaving ? (
                   <Loader2 className="h-4 w-4 mr-1 animate-spin" />
@@ -395,13 +396,14 @@ export function HomePage() {
               <Button
                 onClick={handleAnalyze}
                 disabled={!noteContent.trim() || isProcessing}
+                title="进行深度 AI 分析"
               >
                 {isProcessing ? (
                   <Loader2 className="h-4 w-4 mr-1 animate-spin" />
                 ) : (
                   <BrainCircuit className="h-4 w-4 mr-1" />
                 )}
-                分析
+                深度分析
               </Button>
               {linkedNote && (
                 <span className="text-xs text-muted-foreground ml-2">

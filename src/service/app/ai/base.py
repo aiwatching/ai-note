@@ -110,3 +110,23 @@ class AIServiceBase(ABC):
             Schedule info or None if no schedule found
         """
         pass
+
+    @abstractmethod
+    async def extract_title(
+        self, content: str, categories: Optional[List[str]] = None
+    ) -> Dict:
+        """
+        Extract title/core topic from note content (simplified analysis).
+
+        Args:
+            content: Note content
+            categories: Optional list of categories
+
+        Returns:
+            dict: {
+                'title': str,
+                'category': str,
+                'summary': str
+            }
+        """
+        pass

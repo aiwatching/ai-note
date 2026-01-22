@@ -121,6 +121,56 @@ async def get_notes(
     )
 
 
+@router.get("/grouped")
+async def get_notes_grouped(
+    page: int = Query(1, ge=1, description="Page number"),
+    page_size: int = Query(20, ge=1, le=100, description="Items per page"),
+    category: Optional[str] = Query(None, description="Filter by category"),
+    db: Session = Depends(get_db),
+):
+    """
+    Get notes grouped by title.
+
+    Returns groups of notes that share the same title, sorted by latest update.
+    """
+    user_id = get_or_create_default_user(db)
+    service = NoteService(db)
+
+    groups, total = service.get_notes_grouped_by_title(
+        user_id=user_id,
+        page=page,
+        page_size=page_size,
+        category=category,
+    )
+
+    # Format response
+    result = []
+    for group in groups:
+        result.append({
+            "title": group["title"],
+            "note_count": len(group["notes"]),
+            "latest_updated_at": group["latest_updated_at"].isoformat() if group["latest_updated_at"] else None,
+            "notes": [
+                {
+                    "id": note.id,
+                    "title": note.title,
+                    "category": note.category,
+                    "summary": note.summary,
+                    "created_at": note.created_at.isoformat() if note.created_at else None,
+                    "updated_at": note.updated_at.isoformat() if note.updated_at else None,
+                }
+                for note in group["notes"]
+            ],
+        })
+
+    return {
+        "total_groups": total,
+        "page": page,
+        "page_size": page_size,
+        "groups": result,
+    }
+
+
 @router.get("/{note_id}", response_model=NoteDetailResponse)
 async def get_note(
     note_id: int,
@@ -323,3 +373,31 @@ async def get_note_with_relations(
         "entities": result["entities"],
         "related_notes": result["related_notes"],
     }
+
+
+@router.delete("/{note_id}/relations/{related_note_id}")
+async def delete_note_relation(
+    note_id: int,
+    related_note_id: int,
+    db: Session = Depends(get_db),
+):
+    """
+    Delete/break the relationship between two notes.
+
+    This allows users to manually remove incorrect or unwanted relations.
+    """
+    user_id = get_or_create_default_user(db)
+    service = NoteService(db)
+
+    # Verify note exists
+    note = service.get_note(note_id, user_id)
+    if not note:
+        raise HTTPException(status_code=404, detail="Note not found")
+
+    # Delete the relation
+    deleted = service.delete_relation(note_id, related_note_id)
+
+    if deleted:
+        return {"message": "Relation deleted successfully"}
+    else:
+        return {"message": "No relation found to delete"}

@@ -5,6 +5,7 @@ import type {
   NoteListResponse,
   NoteCreate,
   NoteUpdate,
+  NoteGroupedResponse,
 } from '@/types';
 
 export const noteService = {
@@ -17,6 +18,15 @@ export const noteService = {
     order?: string;
   }): Promise<NoteListResponse> {
     const response = await api.get<NoteListResponse>('/notes', { params });
+    return response.data;
+  },
+
+  async getNotesGrouped(params?: {
+    page?: number;
+    page_size?: number;
+    category?: string;
+  }): Promise<NoteGroupedResponse> {
+    const response = await api.get<NoteGroupedResponse>('/notes/grouped', { params });
     return response.data;
   },
 
@@ -44,5 +54,9 @@ export const noteService = {
       params: { hard_delete: hardDelete },
     });
     return response.data;
+  },
+
+  async deleteRelation(noteId: number, relatedNoteId: number): Promise<void> {
+    await api.delete(`/notes/${noteId}/relations/${relatedNoteId}`);
   },
 };

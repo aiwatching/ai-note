@@ -1,22 +1,26 @@
-"""Note business logic service with deep AI analysis."""
+"""Note business logic service with simplified title-based analysis."""
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple, Any
 
 from loguru import logger
-from sqlalchemy import desc, or_
+from sqlalchemy import desc, func, or_
 from sqlalchemy.orm import Session
 
 from ..ai.factory import AIServiceFactory
 from ..ai.prompts import DEFAULT_CATEGORIES, DEFAULT_DOMAINS
 from ..config import get_settings
 from ..models.note import Note
+from ..models.note_relation import NoteRelation
 from ..schemas.note_schema import AIAnalysisResult, NoteCreate, NoteUpdate
 from .entity_service import EntityService
 from .relation_service import RelationService
 
 
 class NoteService:
-    """Service for note-related operations with deep AI analysis."""
+    """Service for note-related operations with title-based analysis."""
+
+    # Maximum number of related notes per note
+    MAX_RELATED_NOTES = 2
 
     def __init__(self, db: Session):
         """Initialize note service."""
@@ -142,7 +146,7 @@ class NoteService:
         self, user_id: int, note_data: NoteCreate
     ) -> Tuple[Note, Optional[Dict]]:
         """
-        Create a new note with deep AI analysis.
+        Create a new note with simple title extraction.
 
         Args:
             user_id: User ID
@@ -151,7 +155,7 @@ class NoteService:
         Returns:
             Tuple of (Note, analysis result dict)
         """
-        # Create note in database (all content stored in DB, no file storage needed)
+        # Create note in database
         note = Note(
             user_id=user_id,
             raw_content=note_data.content,
@@ -161,71 +165,138 @@ class NoteService:
         self.db.commit()
         self.db.refresh(note)
 
-        # Run deep AI analysis if service is available
+        # Run simple title extraction (always enabled for save)
         analysis_result = None
         if self.ai_service:
             try:
-                current_date = datetime.now().strftime("%Y-%m-%d %H:%M")
-                # Debug: Log the content being sent to AI
-                logger.info(f"=== Sending to AI ===")
+                logger.info(f"=== Extracting title for Note {note.id} ===")
                 logger.info(f"Content length: {len(note_data.content)} chars")
                 logger.info(f"Content preview: {note_data.content[:200]}...")
-                logger.info(f"Custom prompt: {note_data.custom_prompt}")
 
-                analysis = await self.ai_service.deep_analyze_note(
+                # Simple title extraction
+                title_result = await self.ai_service.extract_title(
                     content=note_data.content,
-                    current_date=current_date,
                     categories=DEFAULT_CATEGORIES,
-                    domains=DEFAULT_DOMAINS,
-                    custom_prompt=note_data.custom_prompt,
                 )
-                analysis_result = analysis
 
-                # Debug: Print analysis result
-                logger.info(f"=== AI Analysis Result for Note {note.id} ===")
-                logger.info(f"Title: {analysis.get('basic_info', {}).get('title')}")
-                logger.info(f"Category: {analysis.get('basic_info', {}).get('category')}")
-                logger.info(f"Summary: {analysis.get('basic_info', {}).get('summary')}")
-                logger.info(f"Keywords: {analysis.get('topic_analysis', {}).get('keywords')}")
-                logger.info(f"Domain: {analysis.get('topic_analysis', {}).get('domain')}")
-                logger.info(f"Entities: {analysis.get('entities', {})}")
-                logger.info(f"Time Info: {analysis.get('time_info', {})}")
-                logger.info(f"Priority: {analysis.get('priority_assessment', {})}")
-                logger.info(f"Key Points: {analysis.get('key_points', [])}")
-                logger.info(f"Action Suggestions: {analysis.get('action_suggestions', [])}")
-                logger.debug(f"Full Analysis: {analysis}")
-                logger.info("=== End Analysis Result ===")
+                logger.info(f"Title extracted: {title_result.get('title')}")
+                logger.info(f"Category: {title_result.get('category')}")
+                logger.info(f"Summary: {title_result.get('summary')}")
 
-                # Apply analysis results to note
-                self._apply_deep_analysis_to_note(note, analysis)
+                # Apply title extraction result to note
+                note.title = title_result.get("title")
+                note.category = title_result.get("category", "个人杂记")
+                note.summary = title_result.get("summary")
 
-                # Process entities from analysis
-                try:
-                    entities_data = analysis.get("entities", {})
-                    if entities_data:
-                        self.entity_service.process_note_entities(
-                            note, entities_data, user_id
-                        )
-                        logger.debug(f"Processed entities for note {note.id}")
-                except Exception as entity_error:
-                    logger.error(f"Entity processing failed: {entity_error}")
+                analysis_result = {
+                    "title": note.title,
+                    "category": note.category,
+                    "summary": note.summary,
+                }
 
             except Exception as e:
-                logger.error(f"Deep AI analysis failed: {e}")
-                # Continue without AI analysis
+                logger.error(f"Title extraction failed: {e}")
+                # Continue without title extraction
 
         note.status = "active"
         self.db.commit()
         self.db.refresh(note)
 
-        # Calculate relations with other notes (async-friendly)
+        # Build title-based relationships (limit to MAX_RELATED_NOTES)
         try:
-            self.relation_service.calculate_note_relations(note)
-            logger.debug(f"Calculated relations for note {note.id}")
+            self._build_title_based_relations(note, user_id)
+            logger.debug(f"Built title-based relations for note {note.id}")
         except Exception as rel_error:
-            logger.error(f"Relation calculation failed: {rel_error}")
+            logger.error(f"Title-based relation building failed: {rel_error}")
 
         return note, analysis_result
+
+    def _build_title_based_relations(self, note: Note, user_id: int) -> List[NoteRelation]:
+        """
+        Build relationships based on title similarity.
+
+        Find notes with similar titles and create relations (max 2 per note).
+        """
+        if not note.title:
+            return []
+
+        # Find notes with the same or similar title
+        similar_notes = (
+            self.db.query(Note)
+            .filter(
+                Note.user_id == user_id,
+                Note.id != note.id,
+                Note.status == "active",
+                Note.title.isnot(None),
+            )
+            .all()
+        )
+
+        created_relations = []
+
+        for other_note in similar_notes:
+            if len(created_relations) >= self.MAX_RELATED_NOTES:
+                break
+
+            # Calculate title similarity
+            similarity = self._calculate_title_similarity(note.title, other_note.title)
+
+            if similarity >= 0.5:  # At least 50% similar
+                # Create or update relation
+                existing = (
+                    self.db.query(NoteRelation)
+                    .filter(
+                        NoteRelation.source_note_id == note.id,
+                        NoteRelation.target_note_id == other_note.id,
+                    )
+                    .first()
+                )
+
+                if existing:
+                    existing.relation_type = "same_topic"
+                    existing.relation_score = similarity
+                    existing.updated_at = datetime.utcnow()
+                else:
+                    relation = NoteRelation(
+                        user_id=user_id,
+                        source_note_id=note.id,
+                        target_note_id=other_note.id,
+                        relation_type="same_topic",
+                        relation_score=similarity,
+                    )
+                    self.db.add(relation)
+                    created_relations.append(relation)
+
+        self.db.commit()
+        return created_relations
+
+    def _calculate_title_similarity(self, title1: str, title2: str) -> float:
+        """Calculate similarity between two titles."""
+        if not title1 or not title2:
+            return 0.0
+
+        # Normalize titles
+        t1 = title1.lower().strip()
+        t2 = title2.lower().strip()
+
+        # Exact match
+        if t1 == t2:
+            return 1.0
+
+        # Word-based Jaccard similarity
+        words1 = set(t1.split())
+        words2 = set(t2.split())
+
+        if not words1 or not words2:
+            return 0.0
+
+        intersection = len(words1 & words2)
+        union = len(words1 | words2)
+
+        if union == 0:
+            return 0.0
+
+        return intersection / union
 
     def _generate_organized_content(self, raw_content: str, analysis: Dict) -> str:
         """Generate organized markdown content from analysis."""
@@ -337,11 +408,11 @@ class NoteService:
         if note_data.content:
             note.raw_content = note_data.content
 
-            # Re-analyze if requested
             if note_data.reanalyze and self.ai_service:
+                # Deep analysis requested (from "Analyze" button)
                 try:
                     current_date = datetime.now().strftime("%Y-%m-%d %H:%M")
-                    logger.info(f"Re-analyzing note {note_id}...")
+                    logger.info(f"Deep re-analyzing note {note_id}...")
                     analysis = await self.ai_service.deep_analyze_note(
                         content=note_data.content,
                         current_date=current_date,
@@ -351,20 +422,18 @@ class NoteService:
                     )
                     analysis_result = analysis
 
-                    # Debug: Print re-analysis result
-                    logger.info(f"=== AI Re-Analysis Result for Note {note_id} ===")
+                    logger.info(f"=== AI Deep Re-Analysis Result for Note {note_id} ===")
                     logger.info(f"Title: {analysis.get('basic_info', {}).get('title')}")
                     logger.info(f"Category: {analysis.get('basic_info', {}).get('category')}")
                     logger.info(f"Summary: {analysis.get('basic_info', {}).get('summary')}")
                     logger.info(f"Keywords: {analysis.get('topic_analysis', {}).get('keywords')}")
-                    logger.info(f"Entities: {analysis.get('entities', {})}")
                     logger.info(f"Key Points: {analysis.get('key_points', [])}")
-                    logger.info("=== End Re-Analysis Result ===")
+                    logger.info("=== End Deep Re-Analysis Result ===")
 
-                    # Apply analysis results
+                    # Apply deep analysis results
                     self._apply_deep_analysis_to_note(note, analysis)
 
-                    # Re-process entities
+                    # Process entities
                     try:
                         entities_data = analysis.get("entities", {})
                         if entities_data:
@@ -372,21 +441,51 @@ class NoteService:
                                 note, entities_data, user_id
                             )
                     except Exception as entity_error:
-                        logger.error(f"Entity re-processing failed: {entity_error}")
+                        logger.error(f"Entity processing failed: {entity_error}")
 
                 except Exception as e:
-                    logger.error(f"AI re-analysis failed: {e}")
+                    logger.error(f"AI deep re-analysis failed: {e}")
+
+            elif self.ai_service:
+                # Simple title extraction (from "Save" button)
+                try:
+                    logger.info(f"Re-extracting title for note {note_id}...")
+                    title_result = await self.ai_service.extract_title(
+                        content=note_data.content,
+                        categories=DEFAULT_CATEGORIES,
+                    )
+
+                    logger.info(f"Title re-extracted: {title_result.get('title')}")
+
+                    note.title = title_result.get("title")
+                    note.category = title_result.get("category", note.category or "个人杂记")
+                    note.summary = title_result.get("summary")
+
+                    analysis_result = {
+                        "title": note.title,
+                        "category": note.category,
+                        "summary": note.summary,
+                    }
+
+                except Exception as e:
+                    logger.error(f"Title re-extraction failed: {e}")
 
         note.updated_at = datetime.now()
         self.db.commit()
         self.db.refresh(note)
 
-        # Recalculate relations if content changed
+        # Rebuild title-based relations if content changed
         if note_data.content:
             try:
-                self.relation_service.calculate_note_relations(note)
+                # Clear old relations and rebuild
+                self.db.query(NoteRelation).filter(
+                    NoteRelation.source_note_id == note_id
+                ).delete(synchronize_session=False)
+                self.db.commit()
+
+                self._build_title_based_relations(note, user_id)
             except Exception as rel_error:
-                logger.error(f"Relation recalculation failed: {rel_error}")
+                logger.error(f"Title-based relation rebuild failed: {rel_error}")
 
         return note, analysis_result
 
@@ -531,3 +630,74 @@ class NoteService:
             "entities": self.get_note_entities(note_id),
             "related_notes": self.get_related_notes(note_id, user_id),
         }
+
+    def delete_relation(self, source_note_id: int, target_note_id: int) -> bool:
+        """Delete a relation between two notes."""
+        # Delete both directions
+        deleted_count = (
+            self.db.query(NoteRelation)
+            .filter(
+                or_(
+                    (NoteRelation.source_note_id == source_note_id) &
+                    (NoteRelation.target_note_id == target_note_id),
+                    (NoteRelation.source_note_id == target_note_id) &
+                    (NoteRelation.target_note_id == source_note_id),
+                )
+            )
+            .delete(synchronize_session=False)
+        )
+        self.db.commit()
+        return deleted_count > 0
+
+    def get_notes_grouped_by_title(
+        self,
+        user_id: int,
+        page: int = 1,
+        page_size: int = 20,
+        category: Optional[str] = None,
+    ) -> Tuple[List[Dict], int]:
+        """
+        Get notes grouped by title for the notes list view.
+
+        Returns list of groups, each containing notes with the same title.
+        """
+        query = self.db.query(Note).filter(
+            Note.user_id == user_id,
+            Note.status == "active",
+        )
+
+        if category:
+            query = query.filter(Note.category == category)
+
+        # Get all notes ordered by title then by created_at
+        notes = query.order_by(Note.title, desc(Note.created_at)).all()
+
+        # Group notes by title
+        groups = {}
+        for note in notes:
+            title = note.title or "无标题"
+            if title not in groups:
+                groups[title] = {
+                    "title": title,
+                    "notes": [],
+                    "latest_updated_at": note.updated_at,
+                }
+            groups[title]["notes"].append(note)
+            # Update latest timestamp
+            if note.updated_at > groups[title]["latest_updated_at"]:
+                groups[title]["latest_updated_at"] = note.updated_at
+
+        # Convert to list and sort by latest update
+        grouped_list = sorted(
+            groups.values(),
+            key=lambda g: g["latest_updated_at"],
+            reverse=True
+        )
+
+        total = len(grouped_list)
+
+        # Paginate
+        offset = (page - 1) * page_size
+        paginated = grouped_list[offset:offset + page_size]
+
+        return paginated, total

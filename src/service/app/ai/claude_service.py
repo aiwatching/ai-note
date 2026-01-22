@@ -16,6 +16,7 @@ from .prompts import (
     SEMANTIC_SEARCH_PROMPT,
     EXTRACT_TODOS_PROMPT,
     EXTRACT_SCHEDULE_PROMPT,
+    EXTRACT_TITLE_PROMPT,
 )
 
 
@@ -460,3 +461,34 @@ class ClaudeService(AIServiceBase):
             "participants": schedule.get("participants", []),
             "is_all_day": schedule.get("is_all_day", False),
         }
+
+    async def extract_title(
+        self, content: str, categories: Optional[List[str]] = None
+    ) -> Dict:
+        """Extract title/core topic from note content (simplified analysis)."""
+        cats = categories or DEFAULT_CATEGORIES
+        prompt = EXTRACT_TITLE_PROMPT.replace("{content}", content)
+        prompt = prompt.replace("{categories}", ", ".join(cats))
+
+        try:
+            message = self.client.messages.create(
+                model=self.model,
+                max_tokens=512,
+                messages=[{"role": "user", "content": prompt}],
+            )
+
+            result_text = message.content[0].text
+            result = self._extract_json(result_text)
+            return {
+                "title": result.get("title"),
+                "category": result.get("category", "个人杂记"),
+                "summary": result.get("summary"),
+            }
+
+        except anthropic.APIError as e:
+            logger.error(f"Claude extract_title error: {e}")
+            return {
+                "title": None,
+                "category": "个人杂记",
+                "summary": None,
+            }
