@@ -6,6 +6,7 @@ import { NotesPage } from '@/pages/Notes';
 import { SearchPage } from '@/pages/Search';
 import { TodoPage } from '@/pages/Todo';
 import { SettingsPage } from '@/pages/Settings';
+import { ChatPage } from '@/pages/Chat';
 
 function App() {
   return (
@@ -16,6 +17,7 @@ function App() {
         <Route path="notes/:id" element={<NotesPage />} />
         <Route path="search" element={<SearchPage />} />
         <Route path="todos" element={<TodoPage />} />
+        <Route path="chat" element={<ChatPage />} />
         <Route path="settings" element={<SettingsPage />} />
       </Route>
     </Routes>

@@ -7,12 +7,14 @@ import {
   CheckSquare,
   Settings,
   PenLine,
+  MessageSquare,
 } from 'lucide-react';
 import { cn } from '@/utils/cn';
 
 const navItems = [
   { to: '/', icon: Home, label: 'Home' },
   { to: '/notes', icon: FileText, label: 'Notes' },
+  { to: '/chat', icon: MessageSquare, label: 'AI Chat' },
   { to: '/search', icon: Search, label: 'Search' },
   { to: '/todos', icon: CheckSquare, label: 'Todos' },
   { to: '/settings', icon: Settings, label: 'Settings' },

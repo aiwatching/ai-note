@@ -29,6 +29,15 @@ class Settings(BaseSettings):
     deepseek_model: str = "deepseek-chat"
     deepseek_base_url: str = "https://api.deepseek.com/v1"
 
+    # Gemini settings
+    gemini_api_key: str = ""
+    gemini_model: str = "gemini-2.0-flash"
+
+    # Grok settings (xAI)
+    grok_api_key: str = ""
+    grok_model: str = "grok-3-latest"
+    grok_base_url: str = "https://api.x.ai/v1"
+
     # OpenAI settings (optional, for future use)
     openai_api_key: str = ""
 

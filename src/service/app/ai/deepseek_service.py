@@ -523,3 +523,11 @@ class DeepSeekService(AIServiceBase):
                 "category": "个人杂记",
                 "summary": None,
             }
+
+    async def chat(self, messages: List[Dict], max_tokens: int = 2048) -> str:
+        """Send chat messages and get response."""
+        try:
+            return self._make_request(messages, max_tokens)
+        except Exception as e:
+            logger.error(f"DeepSeek chat error: {e}")
+            raise

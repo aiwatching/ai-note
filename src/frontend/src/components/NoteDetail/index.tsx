@@ -16,10 +16,13 @@ import {
   Link2,
   Check,
   Loader2,
+  MessageSquare,
+  ExternalLink,
 } from 'lucide-react';
 import type { NoteDetail as NoteDetailType } from '@/types';
 import { formatDate } from '@/utils/date';
 import { noteService } from '@/services/noteService';
+import { chatService, ChatSessionOut } from '@/services/chatService';
 
 interface Suggestion {
   note_id: number;
@@ -52,6 +55,8 @@ export function NoteDetail({
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
   const [linkingId, setLinkingId] = useState<number | null>(null);
+  const [linkedChats, setLinkedChats] = useState<ChatSessionOut[]>([]);
+  const [loadingChats, setLoadingChats] = useState(false);
 
   const priorityVariant = note.priority as 'high' | 'medium' | 'low' | undefined;
 
@@ -69,6 +74,22 @@ export function NoteDetail({
       }
     }
     loadSuggestions();
+  }, [note.id]);
+
+  // Load linked chat sessions
+  useEffect(() => {
+    async function loadLinkedChats() {
+      setLoadingChats(true);
+      try {
+        const sessions = await chatService.getSessionsByNote(note.id);
+        setLinkedChats(sessions);
+      } catch (error) {
+        console.error('Failed to load linked chats:', error);
+      } finally {
+        setLoadingChats(false);
+      }
+    }
+    loadLinkedChats();
   }, [note.id]);
 
   // Handle linking a note
@@ -206,6 +227,64 @@ export function NoteDetail({
               </div>
             </CardContent>
           </Card>
+
+          {/* Linked Chat Sessions */}
+          {(linkedChats.length > 0 || loadingChats) && (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <MessageSquare className="h-4 w-4" />
+                  关联的 AI 对话
+                  {linkedChats.length > 0 && (
+                    <Badge variant="secondary" className="text-xs">
+                      {linkedChats.length} 个对话
+                    </Badge>
+                  )}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {loadingChats ? (
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    加载中...
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {linkedChats.map((chat) => (
+                      <div
+                        key={chat.id}
+                        className="flex items-center justify-between p-3 rounded-md border hover:bg-muted/50 cursor-pointer"
+                        onClick={() => navigate(`/chat?session=${chat.id}`)}
+                      >
+                        <div className="flex-1">
+                          <p className="font-medium text-sm flex items-center gap-2">
+                            <MessageSquare className="h-4 w-4 text-primary" />
+                            {chat.title || '未命名对话'}
+                          </p>
+                          <div className="flex items-center gap-2 mt-1">
+                            {chat.providers.map((provider) => (
+                              <Badge key={provider} variant="outline" className="text-xs">
+                                {provider}
+                              </Badge>
+                            ))}
+                            <span className="text-xs text-muted-foreground">
+                              {chat.message_count} 条消息
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              {formatDate(chat.updated_at)}
+                            </span>
+                          </div>
+                        </div>
+                        <Button variant="ghost" size="sm">
+                          <ExternalLink className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
           {/* Suggested Relations */}
           {suggestions.length > 0 && (

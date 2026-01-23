@@ -492,3 +492,34 @@ class ClaudeService(AIServiceBase):
                 "category": "个人杂记",
                 "summary": None,
             }
+
+    async def chat(self, messages: List[Dict], max_tokens: int = 2048) -> str:
+        """Send chat messages and get response."""
+        try:
+            # Convert to Anthropic format
+            system_msg = None
+            chat_messages = []
+
+            for msg in messages:
+                if msg["role"] == "system":
+                    system_msg = msg["content"]
+                else:
+                    chat_messages.append({
+                        "role": msg["role"],
+                        "content": msg["content"]
+                    })
+
+            kwargs = {
+                "model": self.model,
+                "max_tokens": max_tokens,
+                "messages": chat_messages,
+            }
+            if system_msg:
+                kwargs["system"] = system_msg
+
+            message = self.client.messages.create(**kwargs)
+            return message.content[0].text
+
+        except anthropic.APIError as e:
+            logger.error(f"Claude chat error: {e}")
+            raise

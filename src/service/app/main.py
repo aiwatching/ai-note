@@ -7,7 +7,7 @@ from loguru import logger
 
 from .config import get_settings
 from .database import init_db
-from .api import notes, search, todos, schedule, agents, entities
+from .api import notes, search, todos, schedule, agents, entities, chat
 from .agents.scheduler import get_scheduler
 from .agents.schedule_agent import ScheduleAgent
 from .agents.content_agent import ContentAgent
@@ -83,6 +83,7 @@ app.include_router(todos.router, prefix="/api/v1/todos", tags=["todos"])
 app.include_router(schedule.router, prefix="/api/v1", tags=["schedules"])
 app.include_router(agents.router, prefix="/api/v1/agents", tags=["agents"])
 app.include_router(entities.router, prefix="/api/v1/entities", tags=["entities"])
+app.include_router(chat.router, prefix="/api/v1/chat", tags=["chat"])
 
 
 @app.get("/")
