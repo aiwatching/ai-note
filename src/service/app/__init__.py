@@ -1,1 +1,0 @@
-"""AI Notes Service Application."""

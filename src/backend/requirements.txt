@@ -1,0 +1,22 @@
+# Web Framework
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+
+# Data Validation
+pydantic>=2.0.0
+pydantic-settings>=2.0.0
+
+# LLM SDKs
+anthropic>=0.40.0
+openai>=1.12.0
+
+# Database
+# SQLAlchemy>=2.0.0  # 暂不需要，使用原生 sqlite3
+
+# Utilities
+python-dotenv>=1.0.0
+httpx>=0.26.0
+
+# Development
+pytest>=8.0.0
+pytest-asyncio>=0.23.0

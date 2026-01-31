@@ -78,3 +78,5 @@ htmlcov/
 
 # Frontend build
 src/frontend/dist/
+docs/openclaw
+/docs/openclaw/
