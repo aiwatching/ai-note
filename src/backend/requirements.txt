@@ -16,6 +16,11 @@ openai>=1.12.0
 # Utilities
 python-dotenv>=1.0.0
 httpx>=0.26.0
+PyYAML>=6.0.0
+
+# Memory & Embeddings
+numpy>=1.24.0
+sentence-transformers>=2.2.0  # Optional: for local embeddings
 
 # Development
 pytest>=8.0.0

@@ -88,9 +88,17 @@ class Tool:
 
     def to_dict(self) -> Dict[str, Any]:
         """转换为字典格式（用于 LLM）"""
+        # Extract first non-empty line as description
+        description = ""
+        if self.description:
+            for line in self.description.split('\n'):
+                line = line.strip()
+                if line and not line.startswith('Args:'):
+                    description = line
+                    break
         return {
             "name": self.name,
-            "description": self.description.split('\n')[0] if self.description else "",
+            "description": description,
             "parameters": self._schema
         }
 

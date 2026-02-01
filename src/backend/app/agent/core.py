@@ -1,7 +1,8 @@
 """
-Agent 核心实现
+Agent Core Implementation
 """
 import json
+import time
 from typing import List, Dict, Any, Optional, AsyncIterator, Callable, TYPE_CHECKING
 from pydantic import BaseModel, Field
 from enum import Enum
@@ -9,6 +10,7 @@ from enum import Enum
 from ..llm import LLMService, LLMResponse
 from ..tools import ToolRegistry
 from ..memory import Memory, Conversation, Message
+from .logger import get_agent_logger, AgentLogger
 
 
 class AgentResult(BaseModel):
@@ -84,8 +86,11 @@ class Agent:
         self.default_provider = default_provider
         self.max_tool_iterations = max_tool_iterations
 
-        # 子 Agent 注册表
+        # Sub-agent registry
         self._sub_agents: Dict[str, 'Agent'] = {}
+
+        # Logger for this agent
+        self.logger: AgentLogger = get_agent_logger(agent_id)
 
     # ==================== Agent Card ====================
 
@@ -121,22 +126,33 @@ class Agent:
         return [agent.get_card() for agent in self._sub_agents.values()]
 
     def _register_call_agent_tool(self):
-        """注册调用子 Agent 的工具"""
+        """Register call_agent tool for sub-agent delegation"""
+        parent_agent = self  # Capture reference for closure
 
         async def call_agent(agent_id: str, message: str) -> str:
-            """
-            调用子 Agent 处理任务
+            """调用专业子Agent处理任务。查看系统提示了解可用的Agent ID（如 stock, dev）。
 
             Args:
-                agent_id: 要调用的 Agent ID
-                message: 发送给 Agent 的消息
+                agent_id: Agent的ID，如 stock（投资分析）、dev（开发助手）
+                message: 发送给Agent的任务描述
             """
-            if agent_id not in self._sub_agents:
-                available = list(self._sub_agents.keys())
-                return f"Agent '{agent_id}' 不存在。可用的 Agent: {available}"
+            if agent_id not in parent_agent._sub_agents:
+                available = list(parent_agent._sub_agents.keys())
+                parent_agent.logger.error(
+                    "agent_not_found",
+                    f"Agent '{agent_id}' not found. Available: {available}"
+                )
+                return f"错误：Agent '{agent_id}' 不存在。可用的Agent: {available}"
 
-            sub_agent = self._sub_agents[agent_id]
+            # Log delegation
+            parent_agent.logger.agent_delegate(agent_id, message)
+
+            sub_agent = parent_agent._sub_agents[agent_id]
             result = await sub_agent.chat(message)
+
+            # Log response
+            parent_agent.logger.agent_response(agent_id, result.content)
+
             return result.content
 
         self.tools.register_function(call_agent)
@@ -172,47 +188,71 @@ class Agent:
         **kwargs
     ) -> AgentResult:
         """
-        主对话方法
+        Main chat method.
 
         Args:
-            message: 用户消息
-            conversation_id: 对话 ID（可选，用于继续对话）
-            provider: 使用的 LLM provider（直接指定）
-            task_type: 任务类型，用于自动选择模型
-                - "simple": 简单任务 -> 最便宜
-                - "chat": 日常对话 -> 便宜模型
-                - "code": 代码相关 -> deepseek
-                - "complex": 复杂推理 -> claude
-            stream: 是否流式输出
-            **kwargs: 其他参数
+            message: User message
+            conversation_id: Conversation ID (optional, for continuing conversation)
+            provider: LLM provider to use (direct specification)
+            task_type: Task type for auto model selection
+                - "simple": Simple task -> cheapest
+                - "chat": Daily chat -> cheap model
+                - "code": Code related -> deepseek
+                - "complex": Complex reasoning -> claude
+            stream: Whether to stream output
+            **kwargs: Additional arguments
 
         Returns:
             AgentResult
         """
-        # 根据 task_type 自动选择模型，或使用指定的 provider
+        start_time = time.time()
+
+        # Select model based on task_type or use specified provider
         if provider:
-            pass  # 使用指定的 provider
+            self.logger.model_select(provider, "explicitly specified")
         elif task_type and hasattr(self.llm, 'get_provider_by_task'):
             provider = self.llm.get_provider_by_task(task_type)
+            self.logger.model_select(provider, f"task_type={task_type}")
         else:
             provider = self.default_provider
+            self.logger.model_select(provider, "default")
 
-        # 获取或创建对话
+        # Get or create conversation
         conversation = self._get_or_create_conversation(conversation_id)
 
-        # 添加用户消息
+        # Log context loading
+        existing_messages = len(conversation.messages)
+        if existing_messages > 0:
+            self.logger.context_load(conversation.id, existing_messages)
+
+        # Add user message
         conversation.add_message("user", message)
 
-        # 准备消息
+        # Prepare messages
         messages = conversation.get_messages_for_llm()
 
-        # 构建完整的 system prompt（包含子 Agent 信息）
+        # Log chat start
+        self.logger.chat_start(
+            message=message,
+            conversation_id=conversation_id,
+            provider=provider,
+            context_messages=existing_messages
+        )
+
+        # Build full system prompt (including sub-agent info)
         full_system_prompt = self.system_prompt + self._get_agents_prompt()
 
-        # 获取工具 schemas
+        # Get tool schemas
         tool_schemas = self.tools.get_schemas() if self.tools.list_tools() else None
 
-        # 工具调用循环
+        # Debug: log tools being passed to LLM
+        if tool_schemas:
+            tool_names = [t.get("name", "unknown") for t in tool_schemas]
+            self.logger.logger.info(f"📋 TOOLS PASSED TO LLM | count={len(tool_schemas)} | tools={tool_names}")
+        else:
+            self.logger.logger.warning("⚠️ NO TOOLS passed to LLM")
+
+        # Tool call loop
         tool_calls_made = []
         agents_called = []
         iterations = 0
@@ -220,7 +260,7 @@ class Agent:
         while iterations < self.max_tool_iterations:
             iterations += 1
 
-            # 调用 LLM
+            # Call LLM
             response = await self.llm.chat(
                 messages=messages,
                 system=full_system_prompt,
@@ -229,17 +269,27 @@ class Agent:
                 **kwargs
             )
 
-            # 如果没有工具调用，返回结果
+            # If no tool calls, return result
             if not response.tool_calls:
-                # 添加助手消息到对话
+                # Add assistant message to conversation
                 conversation.add_message("assistant", response.content)
 
-                # 保存对话
+                # Save conversation
                 if self.memory:
-                    # 自动生成标题
+                    # Auto-generate title
                     if not conversation.title and len(conversation.messages) >= 2:
                         conversation.title = self._generate_title(conversation)
                     self.memory.save_conversation(conversation)
+
+                # Log chat end
+                duration_ms = (time.time() - start_time) * 1000
+                self.logger.chat_end(
+                    response_preview=response.content,
+                    tool_calls=len(tool_calls_made),
+                    agents_called=agents_called,
+                    model_used=response.model,
+                    duration_ms=duration_ms
+                )
 
                 return AgentResult(
                     content=response.content,
@@ -249,8 +299,8 @@ class Agent:
                     model_used=response.model
                 )
 
-            # 执行工具调用
-            tool_results = await self._execute_tools(response.tool_calls)
+            # Execute tool calls with logging
+            tool_results = await self._execute_tools_with_logging(response.tool_calls)
 
             for tc, tr in zip(response.tool_calls, tool_results):
                 tool_calls_made.append({
@@ -258,11 +308,11 @@ class Agent:
                     "arguments": tc.arguments,
                     "result": tr
                 })
-                # 记录调用了哪些子 Agent
+                # Record which sub-agents were called
                 if tc.name == "call_agent":
                     agents_called.append(tc.arguments.get("agent_id", "unknown"))
 
-            # 添加助手消息（包含工具调用）
+            # Add assistant message (with tool calls)
             messages.append({
                 "role": "assistant",
                 "content": response.content or "",
@@ -279,7 +329,7 @@ class Agent:
                 ]
             })
 
-            # 添加工具结果
+            # Add tool results
             for tc, result in zip(response.tool_calls, tool_results):
                 messages.append({
                     "role": "tool",
@@ -287,9 +337,19 @@ class Agent:
                     "content": str(result)
                 })
 
-        # 超过最大迭代次数
+        # Exceeded max iterations
+        duration_ms = (time.time() - start_time) * 1000
+        self.logger.error("max_iterations", f"Exceeded {self.max_tool_iterations} iterations")
+        self.logger.chat_end(
+            response_preview="Processing timeout",
+            tool_calls=len(tool_calls_made),
+            agents_called=agents_called,
+            model_used=provider,
+            duration_ms=duration_ms
+        )
+
         return AgentResult(
-            content="抱歉，处理过程超时了。",
+            content="Sorry, processing timed out.",
             tool_calls_made=tool_calls_made,
             agents_called=agents_called,
             conversation_id=conversation.id,
@@ -306,11 +366,38 @@ class Agent:
         """
         流式对话
 
-        注意：流式模式下不支持工具调用
+        策略：先执行完整的工具调用流程，然后流式返回最终结果。
+        这样既支持工具调用，又能提供流式输出体验。
         """
+        # 如果有工具或子Agent，使用非流式模式处理工具调用
+        has_tools = bool(self.tools.list_tools())
+        has_sub_agents = bool(self._sub_agents)
+
+        if has_tools or has_sub_agents:
+            # 使用完整的chat方法处理工具调用
+            result = await self.chat(
+                message=message,
+                conversation_id=conversation_id,
+                provider=provider,
+                **kwargs
+            )
+
+            # 流式输出最终结果
+            # 分块输出以提供更好的用户体验
+            content = result.content
+            chunk_size = 20  # 每次输出的字符数
+
+            for i in range(0, len(content), chunk_size):
+                chunk = content[i:i + chunk_size]
+                yield chunk
+                # 可以添加小延迟模拟打字效果
+                # await asyncio.sleep(0.01)
+
+            return
+
+        # 没有工具时，使用纯流式模式
         provider = provider or self.default_provider
 
-        # 获取或创建对话
         conversation = self._get_or_create_conversation(conversation_id)
         conversation.add_message("user", message)
 
@@ -345,7 +432,7 @@ class Agent:
         return Conversation()
 
     async def _execute_tools(self, tool_calls: List) -> List[str]:
-        """执行工具调用"""
+        """Execute tool calls (without logging)"""
         results = []
         for tc in tool_calls:
             try:
@@ -353,6 +440,31 @@ class Agent:
                 results.append(str(result))
             except Exception as e:
                 results.append(f"Error executing {tc.name}: {str(e)}")
+        return results
+
+    async def _execute_tools_with_logging(self, tool_calls: List) -> List[str]:
+        """Execute tool calls with logging"""
+        results = []
+        for tc in tool_calls:
+            # Log tool call
+            self.logger.tool_call(tc.name, tc.arguments)
+
+            try:
+                result = await self.tools.execute(tc.name, tc.arguments)
+                result_str = str(result)
+                results.append(result_str)
+
+                # Log success
+                self.logger.tool_result(tc.name, result_str, success=True)
+
+            except Exception as e:
+                error_msg = f"Error executing {tc.name}: {str(e)}"
+                results.append(error_msg)
+
+                # Log error
+                self.logger.tool_result(tc.name, error_msg, success=False)
+                self.logger.error("tool_execution", error_msg, {"tool": tc.name})
+
         return results
 
     def _generate_title(self, conversation: Conversation) -> str:

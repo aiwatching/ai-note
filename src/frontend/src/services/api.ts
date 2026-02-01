@@ -158,3 +158,62 @@ export async function getModels(): Promise<{ models: string[]; default: string }
   }
   return response.json();
 }
+
+// ==================== Debug / Logging API ====================
+
+export interface AgentEvent {
+  timestamp: string;
+  event_type: string;
+  agent_id: string;
+  [key: string]: any;
+}
+
+export interface AgentInfo {
+  id: string;
+  name: string;
+  description: string;
+  provider: string;
+  skills: string[];
+  tools: string[];
+}
+
+// 获取Agent日志
+export async function getAgentLogs(agentId: string = 'main', count: number = 50): Promise<{
+  agent_id: string;
+  events: AgentEvent[];
+}> {
+  const response = await fetch(`${API_BASE}/chat/logs?agent_id=${agentId}&count=${count}`);
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+  return response.json();
+}
+
+// 获取Agent委托日志
+export async function getAgentDelegationLogs(): Promise<{
+  delegations: AgentEvent[];
+}> {
+  const response = await fetch(`${API_BASE}/chat/logs/agents`);
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+  return response.json();
+}
+
+// 获取所有Agent日志
+export async function getAllAgentLogs(count: number = 20): Promise<Record<string, AgentEvent[]>> {
+  const response = await fetch(`${API_BASE}/chat/logs/all?count=${count}`);
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+  return response.json();
+}
+
+// 获取所有Agent信息
+export async function getAgents(): Promise<AgentInfo[]> {
+  const response = await fetch(`${API_BASE}/chat/agents`);
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+  return response.json();
+}

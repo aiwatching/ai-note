@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { useChatStore } from './store/chatStore';
+import DebugPanel from './components/DebugPanel';
 import {
   Send,
   Plus,
@@ -16,6 +17,7 @@ import {
 function App() {
   const [input, setInput] = useState('');
   const [showSidebar, setShowSidebar] = useState(true);
+  const [showDebugPanel, setShowDebugPanel] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const {
@@ -113,7 +115,7 @@ function App() {
       )}
 
       {/* 主内容区 */}
-      <div className="flex-1 flex flex-col">
+      <div className={`flex-1 flex flex-col ${showDebugPanel ? 'pb-72' : ''}`}>
         {/* 顶部栏 */}
         <div className="h-12 bg-white border-b flex items-center justify-between px-4">
           <div className="flex items-center gap-3">
@@ -234,6 +236,12 @@ function App() {
           </div>
         </div>
       </div>
+
+      {/* Debug Panel */}
+      <DebugPanel
+        isOpen={showDebugPanel}
+        onToggle={() => setShowDebugPanel(!showDebugPanel)}
+      />
     </div>
   );
 }
