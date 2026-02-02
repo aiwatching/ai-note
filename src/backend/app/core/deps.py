@@ -332,6 +332,308 @@ def _register_agent_tools(agent: Agent, config: AgentConfig):
     # ==================== Dev Agent 工具 ====================
     # Dev Agent 暂无专属工具，使用通用对话能力
 
+    # ==================== Task Agent 工具 ====================
+    elif config.id == "task":
+        import json
+        from ..tasks import (
+            get_task_service, CreateTaskRequest,
+            ActionType, ScheduleType, IntervalUnit, TaskStatus
+        )
+
+        @agent.tool()
+        async def create_task(
+            name: str,
+            action_type: str,
+            action_config: dict,
+            schedule_type: str = "once",
+            interval_value: int = None,
+            interval_unit: str = None,
+            notify_channels: list = None,
+        ) -> str:
+            """创建一个新的定时任务
+
+            Args:
+                name: 任务名称
+                action_type: 任务类型 (stock_alert, stock_analysis, portfolio_monitor, news_watch)
+                action_config: 任务配置，根据类型不同而不同
+                schedule_type: 调度类型 (once, interval, cron)
+                interval_value: 间隔值（用于 interval 类型）
+                interval_unit: 间隔单位 (minutes, hours, days)
+                notify_channels: 通知渠道列表 (telegram, discord, slack)
+            """
+            try:
+                service = get_task_service()
+
+                # Add notify_channels to action_config if provided
+                if notify_channels:
+                    action_config["notify_channels"] = notify_channels
+
+                request = CreateTaskRequest(
+                    name=name,
+                    action_type=ActionType(action_type),
+                    action_config=action_config,
+                    schedule_type=ScheduleType(schedule_type),
+                    interval_value=interval_value,
+                    interval_unit=IntervalUnit(interval_unit) if interval_unit else None,
+                )
+
+                task = service.create_task(request)
+
+                return f"""任务创建成功！
+
+- **ID**: {task.id}
+- **名称**: {task.name}
+- **类型**: {task.action_type.value}
+- **调度**: {task.schedule.type.value}
+- **状态**: {task.status.value}
+- **下次执行**: {task.next_execution_at.strftime('%Y-%m-%d %H:%M') if task.next_execution_at else '待定'}
+"""
+            except Exception as e:
+                return f"创建任务失败: {str(e)}"
+
+        @agent.tool()
+        async def list_tasks(
+            status: str = None,
+            action_type: str = None,
+            limit: int = 20,
+        ) -> str:
+            """列出所有任务
+
+            Args:
+                status: 按状态过滤 (pending, scheduled, running, completed, paused, cancelled, failed)
+                action_type: 按类型过滤 (stock_alert, stock_analysis, portfolio_monitor, news_watch)
+                limit: 返回数量上限
+            """
+            try:
+                service = get_task_service()
+
+                tasks, total = service.list_tasks(
+                    status=TaskStatus(status) if status else None,
+                    action_type=ActionType(action_type) if action_type else None,
+                    limit=limit,
+                )
+
+                if not tasks:
+                    return "暂无任务"
+
+                result = ["## 任务列表\n"]
+                result.append("| 名称 | 类型 | 状态 | 执行次数 | 下次执行 |")
+                result.append("|------|------|------|----------|----------|")
+
+                for t in tasks:
+                    next_exec = t.next_execution_at.strftime('%m-%d %H:%M') if t.next_execution_at else "-"
+                    result.append(f"| {t.name} | {t.action_type.value} | {t.status.value} | {t.execution_count} | {next_exec} |")
+
+                result.append(f"\n共 {total} 个任务")
+                return "\n".join(result)
+            except Exception as e:
+                return f"列出任务失败: {str(e)}"
+
+        @agent.tool()
+        async def get_task(task_id: str) -> str:
+            """获取任务详情
+
+            Args:
+                task_id: 任务 ID
+            """
+            try:
+                service = get_task_service()
+                task = service.get_task(task_id)
+
+                if not task:
+                    return f"任务 {task_id} 不存在"
+
+                config_str = json.dumps(task.action_config, ensure_ascii=False, indent=2)
+
+                return f"""## 任务详情: {task.name}
+
+- **ID**: {task.id}
+- **描述**: {task.description or '无'}
+- **类型**: {task.action_type.value}
+- **状态**: {task.status.value}
+- **执行次数**: {task.execution_count}
+- **上次执行**: {task.last_executed_at.strftime('%Y-%m-%d %H:%M') if task.last_executed_at else '从未'}
+- **下次执行**: {task.next_execution_at.strftime('%Y-%m-%d %H:%M') if task.next_execution_at else '无'}
+- **创建时间**: {task.created_at.strftime('%Y-%m-%d %H:%M')}
+
+### 配置
+```json
+{config_str}
+```
+"""
+            except Exception as e:
+                return f"获取任务失败: {str(e)}"
+
+        @agent.tool()
+        async def cancel_task(task_id: str) -> str:
+            """取消任务
+
+            Args:
+                task_id: 任务 ID
+            """
+            try:
+                service = get_task_service()
+                if await service.cancel(task_id):
+                    return f"任务 {task_id} 已取消"
+                return f"任务 {task_id} 不存在"
+            except Exception as e:
+                return f"取消任务失败: {str(e)}"
+
+        @agent.tool()
+        async def trigger_task(task_id: str) -> str:
+            """手动触发任务执行
+
+            Args:
+                task_id: 任务 ID
+            """
+            try:
+                service = get_task_service()
+                if await service.trigger(task_id):
+                    return f"任务 {task_id} 已触发执行"
+                return f"任务 {task_id} 不存在或正在运行中"
+            except Exception as e:
+                return f"触发任务失败: {str(e)}"
+
+        @agent.tool()
+        async def get_task_results(
+            task_id: str,
+            limit: int = 5,
+        ) -> str:
+            """获取任务执行结果
+
+            Args:
+                task_id: 任务 ID
+                limit: 返回数量上限
+            """
+            try:
+                service = get_task_service()
+                task = service.get_task(task_id)
+                executions, total = service.get_executions(task_id=task_id, limit=limit)
+
+                if not executions:
+                    return f"任务 {task_id} 暂无执行记录"
+
+                task_name = task.name if task else task_id
+                result = [f"## {task_name} 执行结果 (共 {total} 条)\n"]
+
+                for e in executions:
+                    status = "✅ 成功" if e.success else "❌ 失败"
+                    duration = f"{e.duration_ms}ms" if e.duration_ms else "-"
+                    time_str = e.started_at.strftime('%Y-%m-%d %H:%M:%S')
+
+                    result.append(f"### {status} - {time_str} ({duration})")
+
+                    if e.error:
+                        result.append(f"**错误**: {e.error}")
+
+                    if e.result:
+                        # Format result based on content
+                        data = e.result
+
+                        # Stock alert result
+                        if "triggered" in data:
+                            triggered = "🔔 已触发" if data.get("triggered") else "⏳ 未触发"
+                            result.append(f"- 状态: {triggered}")
+                            if "symbol" in data:
+                                result.append(f"- 股票: {data['symbol']}")
+                            if "current_price" in data:
+                                result.append(f"- 当前价格: ${data['current_price']:.2f}")
+                            if "change_percent" in data:
+                                result.append(f"- 涨跌幅: {data['change_percent']:+.2f}%")
+
+                        # Stock analysis result
+                        elif "analyses" in data:
+                            if "symbol" in data:
+                                result.append(f"- 股票: {data['symbol']}")
+                            if "current_price" in data:
+                                result.append(f"- 价格: ${data['current_price']:.2f}")
+
+                            analyses = data.get("analyses", {})
+                            if "technical" in analyses:
+                                tech = analyses["technical"]
+                                if "trend" in tech:
+                                    result.append(f"- 技术面: {tech['trend']}")
+                            if "fundamental" in analyses:
+                                fund = analyses["fundamental"]
+                                if "rating" in fund:
+                                    result.append(f"- 基本面: {fund['rating']}")
+                            if "sentiment" in analyses:
+                                sent = analyses["sentiment"]
+                                if "overall_sentiment" in sent:
+                                    result.append(f"- 情绪: {sent['overall_sentiment']}")
+
+                        # Portfolio monitor result
+                        elif "total_value" in data:
+                            result.append(f"- 组合价值: ${data['total_value']:,.2f}")
+                            if "change_pct" in data:
+                                result.append(f"- 变化: {data['change_pct']:+.2f}%")
+                            if "triggered" in data and data["triggered"]:
+                                result.append(f"- 状态: 🔔 已触发警报")
+
+                        # News watch result
+                        elif "news_count" in data:
+                            result.append(f"- 新闻数量: {data['news_count']}")
+                            news = data.get("news", [])
+                            if news:
+                                result.append("- 最新新闻:")
+                                for n in news[:3]:
+                                    result.append(f"  - {n.get('title', 'N/A')}")
+
+                        # Generic result
+                        else:
+                            for key, value in list(data.items())[:8]:
+                                if isinstance(value, (str, int, float, bool)):
+                                    if isinstance(value, float):
+                                        result.append(f"- {key}: {value:.2f}")
+                                    else:
+                                        result.append(f"- {key}: {value}")
+
+                    result.append("")
+
+                return "\n".join(result)
+            except Exception as e:
+                return f"获取执行结果失败: {str(e)}"
+
+        @agent.tool()
+        async def search_task_history(
+            query: str,
+            limit: int = 20,
+        ) -> str:
+            """搜索任务执行历史
+
+            Args:
+                query: 搜索关键词
+                limit: 返回数量上限
+            """
+            try:
+                service = get_task_service()
+                executions = service.search_results(query, limit=limit)
+
+                if not executions:
+                    return f"未找到包含 '{query}' 的执行记录"
+
+                result = [f"## 搜索结果: '{query}'\n"]
+
+                for e in executions:
+                    task = service.get_task(e.task_id)
+                    task_name = task.name if task else e.task_id
+                    status = "✅" if e.success else "❌"
+                    time_str = e.started_at.strftime('%Y-%m-%d %H:%M')
+
+                    result.append(f"### {status} {task_name} - {time_str}")
+
+                    if e.result:
+                        result_str = json.dumps(e.result, ensure_ascii=False)
+                        if len(result_str) > 200:
+                            result_str = result_str[:200] + "..."
+                        result.append(f"```\n{result_str}\n```")
+
+                    result.append("")
+
+                return "\n".join(result)
+            except Exception as e:
+                return f"搜索失败: {str(e)}"
+
 
 def _register_base_tools(agent: Agent):
     """注册基础工具（主 Agent 可直接使用）"""

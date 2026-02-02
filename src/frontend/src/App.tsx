@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { useChatStore } from './store/chatStore';
 import DebugPanel from './components/DebugPanel';
+import TaskPanel from './components/TaskPanel';
+import TasksPage from './pages/TasksPage';
 import {
   Send,
   Plus,
@@ -12,12 +14,17 @@ import {
   User,
   Loader2,
   ChevronDown,
+  CalendarClock,
 } from 'lucide-react';
+
+type Page = 'chat' | 'tasks';
 
 function App() {
   const [input, setInput] = useState('');
   const [showSidebar, setShowSidebar] = useState(true);
   const [showDebugPanel, setShowDebugPanel] = useState(false);
+  const [showTaskPanel, setShowTaskPanel] = useState(false);
+  const [currentPage, setCurrentPage] = useState<Page>('chat');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const {
@@ -63,6 +70,11 @@ function App() {
     }
   };
 
+  // Render Tasks Page
+  if (currentPage === 'tasks') {
+    return <TasksPage onBack={() => setCurrentPage('chat')} />;
+  }
+
   return (
     <div className="flex h-screen bg-gray-100">
       {/* 侧边栏 */}
@@ -77,6 +89,21 @@ function App() {
               <Plus size={16} />
               新对话
             </button>
+          </div>
+
+          {/* 导航菜单 */}
+          <div className="px-2 mb-2">
+            <button
+              onClick={() => setCurrentPage('tasks')}
+              className="w-full flex items-center gap-2 px-3 py-2 rounded-md hover:bg-gray-800 transition text-sm text-gray-300"
+            >
+              <CalendarClock size={16} className="text-blue-400" />
+              任务管理
+            </button>
+          </div>
+
+          <div className="px-3 mb-1">
+            <span className="text-xs text-gray-600 uppercase">对话历史</span>
           </div>
 
           {/* 对话列表 */}
@@ -115,7 +142,7 @@ function App() {
       )}
 
       {/* 主内容区 */}
-      <div className={`flex-1 flex flex-col ${showDebugPanel ? 'pb-72' : ''}`}>
+      <div className={`flex-1 flex flex-col ${showDebugPanel || showTaskPanel ? 'pb-80' : ''}`}>
         {/* 顶部栏 */}
         <div className="h-12 bg-white border-b flex items-center justify-between px-4">
           <div className="flex items-center gap-3">
@@ -155,6 +182,9 @@ function App() {
               <div className="text-center text-gray-400 mt-20">
                 <Bot size={40} className="mx-auto mb-3 text-gray-300" />
                 <p className="text-sm">开始一个新对话</p>
+                <p className="text-xs text-gray-400 mt-2">
+                  试试: "帮我创建一个 TSLA 价格警报，当价格超过 $450 时通知我"
+                </p>
               </div>
             ) : (
               messages.map((msg) => (
@@ -241,6 +271,12 @@ function App() {
       <DebugPanel
         isOpen={showDebugPanel}
         onToggle={() => setShowDebugPanel(!showDebugPanel)}
+      />
+
+      {/* Task Panel - 简易面板，现在可以通过侧边栏进入完整页面 */}
+      <TaskPanel
+        isOpen={showTaskPanel}
+        onToggle={() => setShowTaskPanel(!showTaskPanel)}
       />
     </div>
   );

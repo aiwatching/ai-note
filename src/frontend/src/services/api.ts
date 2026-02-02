@@ -224,3 +224,190 @@ export async function getAgents(): Promise<AgentInfo[]> {
   }
   return response.json();
 }
+
+// ==================== Task Management API ====================
+
+export interface TaskSchedule {
+  type: string;
+  scheduled_at?: string;
+  interval_value?: number;
+  interval_unit?: string;
+  cron_expression?: string;
+  max_executions?: number;
+  expires_at?: string;
+}
+
+export interface LastExecutionInfo {
+  success: boolean;
+  executed_at: string;
+  duration_ms: number | null;
+  error: string | null;
+  result_summary: string | null;
+}
+
+export interface TaskSummary {
+  id: string;
+  name: string;
+  description: string;
+  action_type: string;
+  action_config: Record<string, any>;
+  schedule: TaskSchedule;
+  status: string;
+  execution_count: number;
+  last_executed_at: string | null;
+  next_execution_at: string | null;
+  last_execution: LastExecutionInfo | null;
+  tags: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TaskStats {
+  total_tasks: number;
+  pending_tasks: number;
+  scheduled_tasks: number;
+  running_tasks: number;
+  completed_tasks: number;
+  failed_tasks: number;
+  total_executions: number;
+  scheduler_running: boolean;
+  action_types: string[];
+}
+
+export interface TaskExecution {
+  id: string;
+  task_id: string;
+  started_at: string;
+  completed_at: string | null;
+  duration_ms: number | null;
+  success: boolean;
+  result: Record<string, any>;
+  error: string | null;
+}
+
+export interface TaskListResponse {
+  tasks: TaskSummary[];
+  total: number;
+}
+
+export interface ExecutionListResponse {
+  executions: TaskExecution[];
+  total: number;
+}
+
+// 获取任务列表
+export async function getTasks(
+  status?: string,
+  actionType?: string,
+  limit: number = 100
+): Promise<TaskListResponse> {
+  let url = `${API_BASE}/tasks?limit=${limit}`;
+  if (status) url += `&status=${status}`;
+  if (actionType) url += `&action_type=${actionType}`;
+
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+  return response.json();
+}
+
+// 获取任务统计
+export async function getTaskStats(): Promise<TaskStats> {
+  const response = await fetch(`${API_BASE}/tasks/stats`);
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+  return response.json();
+}
+
+// 获取任务详情
+export async function getTask(taskId: string): Promise<TaskSummary> {
+  const response = await fetch(`${API_BASE}/tasks/${taskId}`);
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+  return response.json();
+}
+
+// 触发任务
+export async function triggerTask(taskId: string): Promise<{ success: boolean; message: string }> {
+  const response = await fetch(`${API_BASE}/tasks/${taskId}/trigger`, {
+    method: 'POST',
+  });
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+  return response.json();
+}
+
+// 暂停任务
+export async function pauseTask(taskId: string): Promise<{ success: boolean; message: string }> {
+  const response = await fetch(`${API_BASE}/tasks/${taskId}/pause`, {
+    method: 'POST',
+  });
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+  return response.json();
+}
+
+// 取消任务
+export async function cancelTask(taskId: string): Promise<{ success: boolean; message: string }> {
+  const response = await fetch(`${API_BASE}/tasks/${taskId}/cancel`, {
+    method: 'POST',
+  });
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+  return response.json();
+}
+
+// 恢复任务（从暂停/取消/完成/失败状态恢复）
+export async function resumeTask(taskId: string): Promise<{ success: boolean; message: string }> {
+  const response = await fetch(`${API_BASE}/tasks/${taskId}/resume`, {
+    method: 'POST',
+  });
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+  return response.json();
+}
+
+// 删除任务
+export async function deleteTask(taskId: string): Promise<void> {
+  const response = await fetch(`${API_BASE}/tasks/${taskId}`, {
+    method: 'DELETE',
+  });
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+}
+
+// 获取任务执行历史
+export async function getTaskExecutions(
+  taskId: string,
+  limit: number = 50
+): Promise<ExecutionListResponse> {
+  const response = await fetch(`${API_BASE}/tasks/${taskId}/executions?limit=${limit}`);
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+  return response.json();
+}
+
+// 搜索任务结果
+export async function searchTaskResults(
+  query: string,
+  taskId?: string,
+  limit: number = 20
+): Promise<{ query: string; results: any[] }> {
+  let url = `${API_BASE}/tasks/search/results?q=${encodeURIComponent(query)}&limit=${limit}`;
+  if (taskId) url += `&task_id=${taskId}`;
+
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+  return response.json();
+}

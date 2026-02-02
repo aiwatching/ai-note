@@ -339,9 +339,9 @@ export default function DebugPanel({ isOpen, onToggle }: DebugPanelProps) {
   }
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 bg-gray-900 text-gray-100 shadow-2xl z-50 border-t border-gray-700">
+    <div className="fixed bottom-0 left-0 right-0 h-72 bg-gray-900 text-gray-100 shadow-2xl z-50 border-t border-gray-700 flex flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-2 bg-gray-800 border-b border-gray-700">
+      <div className="flex items-center justify-between px-4 py-2 bg-gray-800 border-b border-gray-700 flex-shrink-0">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
             <Bug size={16} className="text-green-400" />
@@ -453,7 +453,7 @@ export default function DebugPanel({ isOpen, onToggle }: DebugPanelProps) {
       </div>
 
       {/* Content */}
-      <div className="h-72 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto">
         {selectedTab === 'logs' ? (
           <div className="divide-y divide-gray-800">
             {error && (
