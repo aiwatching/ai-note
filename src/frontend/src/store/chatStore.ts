@@ -74,22 +74,31 @@ export const useChatStore = create<ChatState>((set, get) => ({
     try {
       // 流式请求
       let fullContent = '';
-      for await (const chunk of api.sendMessageStream({
+      let newConversationId: string | null = null;
+
+      for await (const event of api.sendMessageStream({
         message: content,
         conversation_id: conversationId || undefined,
         provider: selectedModel,
       })) {
-        fullContent += chunk;
-        set((state) => ({
-          messages: state.messages.map((msg) =>
-            msg.id === assistantMessage.id
-              ? { ...msg, content: fullContent }
-              : msg
-          ),
-        }));
+        if (event.type === 'content' && event.content) {
+          fullContent += event.content;
+          set((state) => ({
+            messages: state.messages.map((msg) =>
+              msg.id === assistantMessage.id
+                ? { ...msg, content: fullContent }
+                : msg
+            ),
+          }));
+        } else if (event.type === 'done') {
+          // 保存conversation_id以便后续消息使用
+          if (event.conversation_id) {
+            newConversationId = event.conversation_id;
+          }
+        }
       }
 
-      // 完成
+      // 完成 - 更新conversationId
       set((state) => ({
         messages: state.messages.map((msg) =>
           msg.id === assistantMessage.id
@@ -97,6 +106,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
             : msg
         ),
         isLoading: false,
+        conversationId: newConversationId || state.conversationId,
       }));
 
       // 刷新对话列表

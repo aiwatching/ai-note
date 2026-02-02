@@ -86,7 +86,7 @@ def get_agent() -> Agent:
     if _agent is None:
         llm = get_llm_service()
 
-        # 创建主 Agent
+        # 创建主 Agent（memory_index 会在首次使用时懒加载）
         _agent = Agent(
             llm=llm,
             agent_id="main",
@@ -98,8 +98,10 @@ def get_agent() -> Agent:
             ],
             tools=default_registry,
             memory=get_memory(),
+            memory_index=None,  # 懒加载
             system_prompt=get_system_prompt(),
-            default_provider=settings.default_model
+            default_provider=settings.default_model,
+            auto_memory_retrieval=True,
         )
 
         # Log agent initialization
@@ -122,6 +124,24 @@ def get_agent() -> Agent:
         print(f"[Agent] Sub-agents registered: {registered_agents}")
 
     return _agent
+
+
+async def get_agent_with_memory() -> Agent:
+    """
+    获取主 Agent 实例，并确保 memory_index 已初始化。
+
+    这是一个 async 函数，用于 API endpoints。
+    """
+    agent = get_agent()
+
+    # 确保 memory_index 已初始化
+    if agent.memory_index is None:
+        memory_index = await get_memory_index()
+        if memory_index:
+            agent.memory_index = memory_index
+            print("[Agent] Memory index attached for cross-conversation retrieval")
+
+    return agent
 
 
 def _register_sub_agents_from_config(main_agent: Agent, llm: LLMService):

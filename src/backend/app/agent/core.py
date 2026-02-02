@@ -10,6 +10,8 @@ from enum import Enum
 from ..llm import LLMService, LLMResponse
 from ..tools import ToolRegistry
 from ..memory import Memory, Conversation, Message
+from ..memory.index import MemoryIndex
+from ..memory.sync import auto_index_conversation
 from .logger import get_agent_logger, AgentLogger
 
 
@@ -71,9 +73,11 @@ class Agent:
         skills: Optional[List[Skill]] = None,
         tools: Optional[ToolRegistry] = None,
         memory: Optional[Memory] = None,
+        memory_index: Optional[MemoryIndex] = None,
         system_prompt: str = "",
         default_provider: str = "claude",
-        max_tool_iterations: int = 10
+        max_tool_iterations: int = 10,
+        auto_memory_retrieval: bool = True,
     ):
         self.llm = llm
         self.agent_id = agent_id
@@ -82,9 +86,11 @@ class Agent:
         self.skills = skills or []
         self.tools = tools or ToolRegistry()
         self.memory = memory
+        self.memory_index = memory_index
         self.system_prompt = system_prompt
         self.default_provider = default_provider
         self.max_tool_iterations = max_tool_iterations
+        self.auto_memory_retrieval = auto_memory_retrieval
 
         # Sub-agent registry
         self._sub_agents: Dict[str, 'Agent'] = {}
@@ -239,8 +245,18 @@ class Agent:
             context_messages=existing_messages
         )
 
-        # Build full system prompt (including sub-agent info)
-        full_system_prompt = self.system_prompt + self._get_agents_prompt()
+        # Retrieve relevant memories (跨对话记忆)
+        memory_context = ""
+        if self.auto_memory_retrieval and self.memory_index:
+            memory_context = await self._retrieve_relevant_memories(message)
+            if memory_context:
+                self.logger.logger.info(f"📚 Retrieved relevant memories for context")
+
+        # Build full system prompt (including sub-agent info and memories)
+        full_system_prompt = self.system_prompt
+        if memory_context:
+            full_system_prompt = memory_context + "\n" + full_system_prompt
+        full_system_prompt = full_system_prompt + self._get_agents_prompt()
 
         # Get tool schemas
         tool_schemas = self.tools.get_schemas() if self.tools.list_tools() else None
@@ -280,6 +296,9 @@ class Agent:
                     if not conversation.title and len(conversation.messages) >= 2:
                         conversation.title = self._generate_title(conversation)
                     self.memory.save_conversation(conversation)
+
+                    # Auto-index to memory system for cross-conversation retrieval
+                    await self._auto_index_conversation(conversation.id)
 
                 # Log chat end
                 duration_ms = (time.time() - start_time) * 1000
@@ -402,11 +421,22 @@ class Agent:
         conversation.add_message("user", message)
 
         messages = conversation.get_messages_for_llm()
+
+        # Retrieve relevant memories for pure streaming mode
+        memory_context = ""
+        if self.auto_memory_retrieval and self.memory_index:
+            memory_context = await self._retrieve_relevant_memories(message)
+
+        # Build system prompt with memory context
+        system_prompt = self.system_prompt
+        if memory_context:
+            system_prompt = memory_context + "\n" + system_prompt
+
         full_response = ""
 
         async for chunk in self.llm.chat_stream(
             messages=messages,
-            system=self.system_prompt,
+            system=system_prompt,
             provider=provider,
             **kwargs
         ):
@@ -419,6 +449,9 @@ class Agent:
             if not conversation.title:
                 conversation.title = self._generate_title(conversation)
             self.memory.save_conversation(conversation)
+
+            # Auto-index to memory system
+            await self._auto_index_conversation(conversation.id)
 
     # ==================== 内部方法 ====================
 
@@ -476,6 +509,68 @@ class Agent:
                 title += "..."
             return title
         return "新对话"
+
+    # ==================== 记忆检索 ====================
+
+    async def _retrieve_relevant_memories(
+        self,
+        query: str,
+        max_results: int = 3,
+        min_score: float = 0.4,
+    ) -> str:
+        """
+        检索与查询相关的记忆，返回可注入到上下文的文本。
+
+        Args:
+            query: 搜索查询（通常是用户消息）
+            max_results: 最大结果数
+            min_score: 最低相关度阈值
+
+        Returns:
+            格式化的记忆上下文文本，如果没有找到则返回空字符串
+        """
+        if not self.memory_index:
+            return ""
+
+        try:
+            results = await self.memory_index.search(
+                query=query,
+                max_results=max_results,
+                min_score=min_score,
+            )
+
+            if not results:
+                return ""
+
+            # 格式化记忆为上下文
+            memory_lines = ["## 相关历史记忆\n以下是与当前对话可能相关的历史信息：\n"]
+            for i, result in enumerate(results, 1):
+                source_info = f"[来源: {result.source}]" if result.source else ""
+                memory_lines.append(f"{i}. {source_info}")
+                memory_lines.append(f"   {result.snippet}")
+                memory_lines.append("")
+
+            memory_lines.append("---\n")
+            return "\n".join(memory_lines)
+
+        except Exception as e:
+            self.logger.logger.warning(f"Memory retrieval failed: {e}")
+            return ""
+
+    async def _auto_index_conversation(self, conversation_id: str):
+        """自动索引对话到记忆系统"""
+        if not self.memory or not self.memory_index:
+            return
+
+        try:
+            await auto_index_conversation(
+                memory=self.memory,
+                memory_index=self.memory_index,
+                conversation_id=conversation_id,
+            )
+            self.logger.logger.debug(f"Auto-indexed conversation: {conversation_id}")
+        except Exception as e:
+            self.logger.logger.warning(f"Auto-index failed: {e}")
 
     # ==================== 模型切换 ====================
 

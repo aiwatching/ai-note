@@ -67,10 +67,19 @@ export async function sendMessage(request: ChatRequest): Promise<ChatResponse> {
   return response.json();
 }
 
-// 流式发送消息
+// 流式消息事件类型
+export interface StreamEvent {
+  type: 'content' | 'done';
+  content?: string;
+  conversation_id?: string;
+  model_used?: string;
+  agents_called?: string[];
+}
+
+// 流式发送消息 - 返回事件流
 export async function* sendMessageStream(
   request: ChatRequest
-): AsyncGenerator<string> {
+): AsyncGenerator<StreamEvent> {
   const response = await fetch(`${API_BASE}/chat/stream`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -101,10 +110,8 @@ export async function* sendMessageStream(
         if (data === '[DONE]') return;
 
         try {
-          const parsed = JSON.parse(data);
-          if (parsed.type === 'content' && parsed.content) {
-            yield parsed.content;
-          }
+          const parsed = JSON.parse(data) as StreamEvent;
+          yield parsed;
         } catch {
           // 忽略解析错误
         }

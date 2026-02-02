@@ -7,7 +7,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 import json
 
-from ..core.deps import get_agent
+from ..core.deps import get_agent, get_agent_with_memory
 from ..agent import get_agent_logger, get_all_loggers
 
 
@@ -35,7 +35,7 @@ class ChatResponse(BaseModel):
 @router.post("", response_model=ChatResponse)
 async def chat(request: ChatRequest):
     """Send a chat message"""
-    agent = get_agent()
+    agent = await get_agent_with_memory()
 
     if request.stream:
         # Streaming response
@@ -73,18 +73,26 @@ async def chat(request: ChatRequest):
 @router.post("/stream")
 async def chat_stream(request: ChatRequest):
     """流式聊天"""
-    agent = get_agent()
+    agent = await get_agent_with_memory()
 
     async def generate():
-        conversation_id = None
-        async for chunk in agent.chat_stream(
+        # 使用非流式方法获取完整响应（包含conversation_id）
+        result = await agent.chat(
             message=request.message,
             conversation_id=request.conversation_id,
             provider=request.provider
-        ):
+        )
+
+        # 流式输出内容
+        content = result.content
+        chunk_size = 30
+
+        for i in range(0, len(content), chunk_size):
+            chunk = content[i:i + chunk_size]
             yield f"data: {json.dumps({'type': 'content', 'content': chunk})}\n\n"
 
-        yield f"data: {json.dumps({'type': 'done'})}\n\n"
+        # 发送完成消息，包含conversation_id和其他元数据
+        yield f"data: {json.dumps({'type': 'done', 'conversation_id': result.conversation_id, 'model_used': result.model_used, 'agents_called': result.agents_called})}\n\n"
 
     return StreamingResponse(
         generate(),

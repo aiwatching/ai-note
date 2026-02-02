@@ -55,9 +55,9 @@ function App() {
     await sendMessage(message);
   };
 
-  // 键盘事件
+  // 键盘事件 - Ctrl+Enter 或 Cmd+Enter 发送
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
       handleSend();
     }
@@ -216,7 +216,7 @@ function App() {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="输入消息... (Enter 发送, Shift+Enter 换行)"
+                placeholder="输入消息... (Ctrl+Enter 发送)"
                 className="flex-1 resize-none border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[40px] max-h-[120px]"
                 rows={1}
                 disabled={isLoading}
