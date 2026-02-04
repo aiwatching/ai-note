@@ -9,6 +9,7 @@ from .stock_alert import StockAlertAction
 from .stock_analysis import StockAnalysisAction
 from .portfolio_monitor import PortfolioMonitorAction
 from .news_watch import NewsWatchAction
+from .social_collect import SocialCollectAction, SocialTrendingAction
 
 __all__ = [
     # Base
@@ -20,4 +21,6 @@ __all__ = [
     "StockAnalysisAction",
     "PortfolioMonitorAction",
     "NewsWatchAction",
+    "SocialCollectAction",
+    "SocialTrendingAction",
 ]

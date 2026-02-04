@@ -11,8 +11,10 @@ from .api.notifications import router as notifications_router
 from .api.stock import router as stock_router
 from .api.memory import router as memory_router
 from .api.tasks import router as tasks_router
+from .api.social import router as social_router
 from .channels import notification_service
 from .tasks import init_task_service
+from .social import init_social_service
 
 
 @asynccontextmanager
@@ -32,6 +34,14 @@ async def lifespan(app: FastAPI):
             print(f"[App] Memory index ready: {stats['chunks']} chunks, {stats['embedding_provider']} provider")
     except Exception as e:
         print(f"[App] Memory index initialization failed (non-fatal): {e}")
+
+    # Initialize social service
+    try:
+        social_service = init_social_service(db_path="./data/social.db")
+        platforms = social_service.get_available_platforms()
+        print(f"[App] Social service ready: platforms={platforms}")
+    except Exception as e:
+        print(f"[App] Social service initialization failed (non-fatal): {e}")
 
     # Initialize task service
     try:
@@ -87,6 +97,7 @@ app.include_router(notifications_router, prefix="/api")
 app.include_router(stock_router, prefix="/api")
 app.include_router(memory_router, prefix="/api")
 app.include_router(tasks_router, prefix="/api")
+app.include_router(social_router, prefix="/api")
 
 
 @app.get("/")

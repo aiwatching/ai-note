@@ -14,6 +14,8 @@ class ActionType(str, Enum):
     STOCK_ANALYSIS = "stock_analysis"
     PORTFOLIO_MONITOR = "portfolio_monitor"
     NEWS_WATCH = "news_watch"
+    SOCIAL_COLLECT = "social_collect"
+    SOCIAL_TRENDING = "social_trending"
     CUSTOM = "custom"
 
 

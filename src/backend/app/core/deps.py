@@ -306,6 +306,50 @@ def _register_agent_tools(agent: Agent, config: AgentConfig):
             except Exception as e:
                 return f"技术分析 {symbol} 失败: {str(e)}"
 
+        @agent.tool()
+        async def social_sentiment(symbol: str, hours: int = 24) -> str:
+            """查询股票的社交媒体情绪
+
+            获取 Reddit、StockTwits 等平台上的讨论情绪分析。
+
+            Args:
+                symbol: 股票代码，如 TSLA, AAPL
+                hours: 分析时间范围（小时），默认 24
+            """
+            try:
+                from ..social import get_social_service
+                service = get_social_service()
+
+                sentiment = service.get_sentiment(symbol=symbol.upper(), hours=hours)
+
+                if sentiment.total_posts == 0:
+                    return f"暂无 {symbol} 的社交媒体数据。请先使用 Collector Agent 采集数据。"
+
+                emoji = "🐂" if sentiment.sentiment_label.value == "bullish" else "🐻" if sentiment.sentiment_label.value == "bearish" else "➖"
+
+                result = [
+                    f"## {symbol.upper()} 社交情绪 {emoji}",
+                    f"",
+                    f"**情绪**: {sentiment.sentiment_label.value.upper()} (分数: {sentiment.sentiment_score:.2f})",
+                    f"**置信度**: {sentiment.confidence:.0%}",
+                    f"",
+                    f"### 统计 (过去 {hours} 小时)",
+                    f"- 总讨论: {sentiment.total_posts} 条",
+                    f"- 看涨: {sentiment.bullish_count} ({sentiment.bullish_count/max(sentiment.total_posts,1):.0%})",
+                    f"- 看跌: {sentiment.bearish_count} ({sentiment.bearish_count/max(sentiment.total_posts,1):.0%})",
+                    f"- 中性: {sentiment.neutral_count}",
+                    f"- 互动量: {sentiment.total_engagement}",
+                ]
+
+                if sentiment.key_themes:
+                    result.append(f"")
+                    result.append(f"### 热门话题")
+                    result.append(f"{', '.join(sentiment.key_themes)}")
+
+                return "\n".join(result)
+            except Exception as e:
+                return f"获取社交情绪失败: {str(e)}"
+
     # ==================== Note Agent 工具 ====================
     elif config.id == "note":
         @agent.tool()
@@ -634,6 +678,274 @@ def _register_agent_tools(agent: Agent, config: AgentConfig):
             except Exception as e:
                 return f"搜索失败: {str(e)}"
 
+    # ==================== Collector Agent 工具 ====================
+    if config.id == "collector":
+        from ..social import get_social_service, SocialPlatform
+
+        @agent.tool()
+        async def collect_symbol(
+            symbol: str,
+            platforms: str = None,
+            limit: int = 50,
+        ) -> str:
+            """采集特定股票的社交媒体数据
+
+            Args:
+                symbol: 股票代码，如 TSLA, AAPL
+                platforms: 平台列表，逗号分隔（reddit, stocktwits, twitter）
+                limit: 每个平台采集数量上限
+            """
+            try:
+                service = get_social_service()
+
+                platform_enums = None
+                if platforms:
+                    platform_enums = [SocialPlatform(p.strip()) for p in platforms.split(",")]
+
+                results = await service.collect_for_symbol(
+                    symbol=symbol.upper(),
+                    platforms=platform_enums,
+                    limit=limit,
+                )
+
+                total = sum(results.values())
+                result_lines = [f"## {symbol.upper()} 社交媒体数据采集完成\n"]
+                result_lines.append(f"**总计采集**: {total} 条帖子\n")
+
+                for platform, count in results.items():
+                    result_lines.append(f"- {platform}: {count} 条")
+
+                # Get sentiment
+                sentiment = service.get_sentiment(symbol.upper())
+                result_lines.append(f"\n### 情绪分析")
+                result_lines.append(f"- **整体情绪**: {sentiment.sentiment_label.value}")
+                result_lines.append(f"- **情绪分数**: {sentiment.sentiment_score:.2f}")
+                result_lines.append(f"- **看涨**: {sentiment.bullish_count} | **看跌**: {sentiment.bearish_count} | **中性**: {sentiment.neutral_count}")
+
+                if sentiment.key_themes:
+                    result_lines.append(f"- **关键话题**: {', '.join(sentiment.key_themes)}")
+
+                return "\n".join(result_lines)
+            except Exception as e:
+                return f"采集 {symbol} 数据失败: {str(e)}"
+
+        @agent.tool()
+        async def collect_trending(
+            platforms: str = None,
+            limit: int = 20,
+        ) -> str:
+            """采集社交媒体热门股票
+
+            Args:
+                platforms: 平台列表，逗号分隔
+                limit: 返回数量上限
+            """
+            try:
+                service = get_social_service()
+
+                platform_enums = None
+                if platforms:
+                    platform_enums = [SocialPlatform(p.strip()) for p in platforms.split(",")]
+
+                trending = await service.collect_trending(platforms=platform_enums, limit=limit)
+
+                if not trending:
+                    return "未获取到热门股票数据"
+
+                result = ["## 🔥 社交媒体热门股票\n"]
+                result.append("| 排名 | 股票 | 提及次数 | 情绪 | 平台 |")
+                result.append("|------|------|----------|------|------|")
+
+                for t in trending:
+                    emoji = "🐂" if t.sentiment_label.value == "bullish" else "🐻" if t.sentiment_label.value == "bearish" else "➖"
+                    platforms_str = ", ".join([p.value for p in t.platforms])
+                    result.append(f"| {t.rank} | {t.symbol} | {t.mentions_count} | {emoji} {t.sentiment_label.value} | {platforms_str} |")
+
+                return "\n".join(result)
+            except Exception as e:
+                return f"采集热门股票失败: {str(e)}"
+
+        @agent.tool()
+        async def get_social_sentiment(
+            symbol: str,
+            hours: int = 24,
+            platform: str = None,
+        ) -> str:
+            """获取股票的社交情绪分析
+
+            Args:
+                symbol: 股票代码
+                hours: 分析时间范围（小时）
+                platform: 指定平台
+            """
+            try:
+                service = get_social_service()
+                sentiment = service.get_sentiment(
+                    symbol=symbol.upper(),
+                    hours=hours,
+                    platform=platform,
+                )
+
+                if sentiment.total_posts == 0:
+                    return f"暂无 {symbol} 的社交媒体数据，请先采集数据"
+
+                emoji = "🐂" if sentiment.sentiment_label.value == "bullish" else "🐻" if sentiment.sentiment_label.value == "bearish" else "➖"
+
+                result = [
+                    f"## {symbol.upper()} 社交情绪分析 {emoji}",
+                    f"",
+                    f"**情绪**: {sentiment.sentiment_label.value.upper()}",
+                    f"**分数**: {sentiment.sentiment_score:.2f} (-1 到 1)",
+                    f"**置信度**: {sentiment.confidence:.0%}",
+                    f"",
+                    f"### 统计",
+                    f"- 总帖子: {sentiment.total_posts}",
+                    f"- 看涨: {sentiment.bullish_count} ({sentiment.bullish_count/max(sentiment.total_posts,1):.0%})",
+                    f"- 看跌: {sentiment.bearish_count} ({sentiment.bearish_count/max(sentiment.total_posts,1):.0%})",
+                    f"- 中性: {sentiment.neutral_count}",
+                    f"- 24h 提及: {sentiment.mentions_24h}",
+                    f"",
+                ]
+
+                if sentiment.key_themes:
+                    result.append(f"### 关键话题")
+                    result.append(f"{', '.join(sentiment.key_themes)}")
+
+                return "\n".join(result)
+            except Exception as e:
+                return f"获取情绪分析失败: {str(e)}"
+
+        @agent.tool()
+        async def search_social(
+            keywords: str,
+            platforms: str = None,
+            limit: int = 30,
+        ) -> str:
+            """搜索社交媒体内容
+
+            Args:
+                keywords: 搜索关键词，逗号分隔
+                platforms: 平台列表，逗号分隔
+                limit: 返回数量上限
+            """
+            try:
+                service = get_social_service()
+                keyword_list = [k.strip() for k in keywords.split(",")]
+
+                platform_enums = None
+                if platforms:
+                    platform_enums = [SocialPlatform(p.strip()) for p in platforms.split(",")]
+
+                posts = await service.search(
+                    keywords=keyword_list,
+                    platforms=platform_enums,
+                    limit=limit,
+                )
+
+                if not posts:
+                    return f"未找到包含 '{keywords}' 的帖子"
+
+                # Save to store
+                result = [f"## 搜索结果: '{keywords}'\n"]
+                result.append(f"找到 {len(posts)} 条帖子\n")
+
+                for i, post in enumerate(posts[:10], 1):
+                    emoji = "🐂" if post.sentiment_label.value == "bullish" else "🐻" if post.sentiment_label.value == "bearish" else "➖"
+                    time_str = post.posted_at.strftime("%m-%d %H:%M")
+                    result.append(f"### {i}. [{post.platform.value}] {time_str} {emoji}")
+
+                    if post.title:
+                        result.append(f"**{post.title[:80]}**")
+
+                    content = post.content[:200] + "..." if len(post.content) > 200 else post.content
+                    result.append(content)
+                    result.append(f"👍 {post.upvotes} | 💬 {post.comments_count}")
+                    result.append("")
+
+                return "\n".join(result)
+            except Exception as e:
+                return f"搜索失败: {str(e)}"
+
+        @agent.tool()
+        async def get_social_posts(
+            symbol: str,
+            hours: int = 24,
+            limit: int = 20,
+        ) -> str:
+            """获取已存储的社交帖子
+
+            Args:
+                symbol: 股票代码
+                hours: 时间范围（小时）
+                limit: 返回数量上限
+            """
+            try:
+                service = get_social_service()
+                posts = service.get_posts(
+                    symbol=symbol.upper(),
+                    hours=hours,
+                    limit=limit,
+                )
+
+                if not posts:
+                    return f"暂无 {symbol} 的存储帖子"
+
+                result = [f"## {symbol.upper()} 社交帖子 (最近 {hours} 小时)\n"]
+
+                for i, post in enumerate(posts[:limit], 1):
+                    emoji = "🐂" if post.sentiment_label.value == "bullish" else "🐻" if post.sentiment_label.value == "bearish" else "➖"
+                    time_str = post.posted_at.strftime("%m-%d %H:%M")
+                    result.append(f"### {i}. [{post.platform.value}] {time_str} {emoji}")
+
+                    if post.title:
+                        result.append(f"**{post.title[:80]}**")
+
+                    content = post.content[:150] + "..." if len(post.content) > 150 else post.content
+                    result.append(content)
+                    result.append(f"👍 {post.upvotes} | 💬 {post.comments_count} | 作者: {post.author}")
+
+                    if post.url:
+                        result.append(f"[链接]({post.url})")
+                    result.append("")
+
+                return "\n".join(result)
+            except Exception as e:
+                return f"获取帖子失败: {str(e)}"
+
+        @agent.tool()
+        async def get_available_platforms() -> str:
+            """获取可用的社交媒体平台列表"""
+            try:
+                service = get_social_service()
+                available = service.get_available_platforms()
+                stats = service.get_stats()
+
+                result = [
+                    "## 社交媒体平台状态",
+                    "",
+                    "### 可用平台",
+                ]
+
+                all_platforms = ["reddit", "stocktwits", "twitter"]
+                for p in all_platforms:
+                    status = "✅" if p in available else "❌ 未配置"
+                    result.append(f"- {p}: {status}")
+
+                result.append("")
+                result.append("### 数据统计")
+                result.append(f"- 已存储帖子: {stats.get('total_posts', 0)}")
+                result.append(f"- 涉及股票: {stats.get('unique_symbols', 0)}")
+
+                by_platform = stats.get('posts_by_platform', {})
+                if by_platform:
+                    result.append("- 按平台分布:")
+                    for p, count in by_platform.items():
+                        result.append(f"  - {p}: {count}")
+
+                return "\n".join(result)
+            except Exception as e:
+                return f"获取平台状态失败: {str(e)}"
+
 
 def _register_base_tools(agent: Agent):
     """注册基础工具（主 Agent 可直接使用）"""
@@ -744,7 +1056,17 @@ def _register_base_tools(agent: Agent):
 
 def get_system_prompt() -> str:
     """获取主 Agent 系统提示"""
-    return """你是一个智能个人助手，可以帮助用户完成各种任务。
+    from datetime import datetime
+    current_date = datetime.now().strftime("%Y年%m月%d日")
+
+    return f"""你是一个智能个人助手，可以帮助用户完成各种任务。
+
+**当前日期**: {current_date}
+
+## 重要提醒
+- 搜索信息时，使用当前年份 ({datetime.now().year} 年)
+- 不要搜索过时的信息（如 2024 年、2025 年的旧数据）
+- 财报、新闻等应搜索最新的
 
 ## 你的能力
 
@@ -760,6 +1082,11 @@ def get_system_prompt() -> str:
 ### 专业能力（通过子 Agent）
 你可以调用专业的子 Agent 来处理特定领域的任务。
 使用 call_agent 工具来调用它们。
+
+**常用场景**：
+- 股票分析、行情查询、技术分析 → `call_agent(agent_id="stock", ...)`
+- 社交媒体数据采集、Reddit/Twitter/StockTwits 数据获取 → `call_agent(agent_id="collector", ...)`
+- 定时任务创建和管理 → `call_agent(agent_id="task", ...)`
 
 ## 记忆系统使用指南
 

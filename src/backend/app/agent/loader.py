@@ -205,16 +205,37 @@ def parse_system_prompt(content: str) -> str:
     """
     Extract system prompt from markdown body.
     Everything before ## Skills or ## Tools is the system prompt.
+
+    Also injects current date information at the beginning.
     """
+    from datetime import datetime
+
     # Remove the title (# Title)
     content = re.sub(r'^#\s+[^\n]+\n', '', content.strip())
 
     # Find where Skills or Tools section starts
     end_match = re.search(r'\n## (Skills|Tools)\s*\n', content)
     if end_match:
-        return content[:end_match.start()].strip()
+        prompt = content[:end_match.start()].strip()
+    else:
+        prompt = content.strip()
 
-    return content.strip()
+    # Inject current date at the beginning
+    current_date = datetime.now().strftime("%Y年%m月%d日")
+    current_year = datetime.now().year
+
+    date_context = f"""**当前日期**: {current_date}
+
+**重要**: 搜索和分析信息时：
+- 使用当前年份 ({current_year} 年)
+- 财报、新闻等应搜索最新数据
+- 不要引用过时信息
+
+---
+
+"""
+
+    return date_context + prompt
 
 
 def parse_agent_md(content: str) -> AgentConfig:
