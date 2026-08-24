@@ -35,6 +35,7 @@ venv/
 ENV/
 .claude/*
 !.claude/skills/
+!.claude/commands/
 
 # Node
 node_modules/
@@ -88,4 +89,3 @@ engdata/config
 # 本地 / Forge 的东西，不进仓库
 .forge/
 .mcp.json
-CLAUDE.md
