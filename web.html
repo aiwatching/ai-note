@@ -1,0 +1,339 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>eng</title>
+<style>
+:root{
+  --bg:#14151a; --panel:#1c1e25; --line:#2c2f38; --fg:#e6e5e1; --dim:#8b8d97;
+  --accent:#7fb069; --warn:#e0a458; --hot:#d9534f; --radius:10px;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,monospace;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);
+  font:15px/1.65 -apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue",sans-serif;}
+.wrap{max-width:760px;margin:0 auto;padding:28px 20px 80px}
+header{display:flex;align-items:baseline;gap:14px;margin-bottom:22px}
+h1{font:600 17px/1 var(--mono);margin:0;letter-spacing:.06em}
+nav{display:flex;gap:2px;margin-left:auto}
+nav button{background:none;border:0;color:var(--dim);font-size:13px;padding:6px 12px;
+  border-radius:7px;cursor:pointer}
+nav button.on{background:var(--panel);color:var(--fg)}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+  padding:20px;margin-bottom:14px}
+.rules{color:var(--dim);font-size:13px;margin-bottom:18px}
+.topic{font-size:21px;font-weight:600;line-height:1.5;margin:6px 0 22px}
+.step{color:var(--dim);font:12px/1 var(--mono);letter-spacing:.1em;margin-bottom:10px}
+#rounds .step{margin-top:22px}
+#rounds .said{margin-top:10px}
+textarea{width:100%;background:#101116;color:var(--fg);border:1px solid var(--line);
+  border-radius:8px;padding:12px 13px;font:15px/1.6 var(--mono);resize:vertical;min-height:76px}
+input[type=text]{width:100%;background:#101116;color:var(--fg);border:1px solid var(--line);
+  border-radius:8px;padding:10px 13px;font-size:15px}
+textarea:focus,input:focus{outline:none;border-color:var(--dim)}
+.row{display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap}
+button.b{background:#2a2d36;color:var(--fg);border:1px solid var(--line);border-radius:8px;
+  padding:9px 16px;font-size:14px;cursor:pointer}
+button.b:hover{border-color:var(--dim)}
+button.b.go{background:var(--accent);border-color:var(--accent);color:#14151a;font-weight:600}
+button.b.rec{background:var(--hot);border-color:var(--hot);color:#fff;font-weight:600}
+button.b:disabled{opacity:.4;cursor:default}
+.said{font:15px/1.75 var(--mono);margin:14px 0 4px;word-break:break-word}
+.said mark{background:var(--hot);color:#fff;border-radius:3px;padding:1px 3px}
+.meta{font-size:13px;color:var(--dim)}
+.meta .bad{color:var(--hot)}
+.meta .good{color:var(--accent)}
+.note{border-left:3px solid var(--warn);padding:2px 0 2px 14px;margin:4px 0 18px;
+  color:var(--fg);font-size:14.5px}
+.refs{list-style:none;padding:0;margin:0}
+.refs li{font:14.5px/1.7 var(--mono);padding:7px 0 7px 16px;border-left:2px solid var(--line);
+  margin-bottom:6px}
+.label{font-size:12px;color:var(--dim);letter-spacing:.04em;margin-bottom:8px}
+.q{display:flex;gap:12px;padding:12px 0;border-bottom:1px solid var(--line);align-items:flex-start}
+.q:last-child{border-bottom:0}
+.q .id{font:12px/1.8 var(--mono);color:var(--dim);flex:0 0 58px}
+.q .body{flex:1;min-width:0}
+.q .sub{font-size:12.5px;color:var(--dim);margin-top:3px}
+.pause{background:#101116;border:1px solid var(--line);border-radius:8px;padding:12px;
+  margin-bottom:10px}
+.pause .txt{font:13.5px/1.6 var(--mono);color:var(--dim)}
+.pause .txt b{color:var(--hot);font-weight:400}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--hot);
+  margin-right:7px;animation:pulse 1s infinite}
+@keyframes pulse{50%{opacity:.25}}
+.hide{display:none}
+.tip{font-size:12.5px;color:var(--dim);margin-top:10px}
+a{color:var(--accent)}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1>eng</h1>
+  <nav>
+    <button id="t-drill" class="on" onclick="tab('drill')">绕道</button>
+    <button id="t-mono" onclick="tab('mono')">独白</button>
+    <button id="t-list" onclick="tab('list')">队列</button>
+  </nav>
+</header>
+
+<!-- ---------- 绕道 ---------- -->
+<section id="p-drill">
+  <div class="card">
+    <div class="rules">不许查词。卡住就绕。8 秒内必须开口。<span id="hist"></span></div>
+    <div class="topic" id="zh">…</div>
+    <div id="rounds"></div>
+
+    <div id="live">
+      <div class="step" id="step">第 1 遍</div>
+      <textarea id="say" placeholder="说完自动填在这里；也可以直接打字"></textarea>
+      <div class="row">
+        <button class="b rec" id="mic" onclick="toggleRec()">● 开始录音</button>
+        <button class="b go" onclick="submitSay()">这遍说完了</button>
+        <span class="meta" id="recmeta"></span>
+      </div>
+    </div>
+
+    <div id="done" class="hide">
+      <div class="label">事后想到更好的说法就填，没有就直接完成</div>
+      <input type="text" id="better" placeholder="better…">
+      <div class="row"><button class="b go" onclick="finish()">完成这题</button></div>
+    </div>
+
+    <div id="coach" class="hide">
+      <div id="note"></div>
+      <div class="label">参考说法 —— 不是标准答案，只是示范手边的词怎么绕</div>
+      <ul class="refs" id="refs"></ul>
+      <div class="row">
+        <button class="b go" onclick="load()">下一题</button>
+        <button class="b" onclick="markUsed()">在真实会议里用过了 → 划掉</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ---------- 独白 ---------- -->
+<section id="p-mono" class="hide">
+  <div class="card">
+    <div class="rules">讲一个你今天真正想清楚的技术问题。不评分，不纠错，不回放。只抽卡壳点。</div>
+    <input type="text" id="topic" placeholder="今天讲什么（一句话，随便）">
+    <div class="row">
+      <button class="b rec" id="mmic" onclick="toggleMono()">● 开始</button>
+      <span class="meta" id="mmeta"></span>
+    </div>
+    <textarea id="mtext" class="hide" placeholder="没配好 whisper 的话，在这里打字"></textarea>
+    <div class="row hide" id="mrow"><button class="b go" onclick="sendMono()">分析卡壳点</button></div>
+  </div>
+  <div class="card hide" id="mres">
+    <div id="msum" class="meta"></div>
+    <div id="mpauses" style="margin-top:16px"></div>
+    <div class="tip hide" id="mtip">写下你当时想说的中文 → 进队列，明天的题。不写就跳过。</div>
+  </div>
+</section>
+
+<!-- ---------- 队列 ---------- -->
+<section id="p-list" class="hide">
+  <div class="card">
+    <div class="label" id="qcount">队列</div>
+    <div id="queue"></div>
+  </div>
+  <div class="card">
+    <div class="label">手动加一条</div>
+    <input type="text" id="a-zh" placeholder="中文（想说的）">
+    <div class="row" style="margin-top:8px">
+      <button class="b go" onclick="addOne()">加进队列</button>
+      <span class="meta" id="addmeta"></span>
+    </div>
+  </div>
+</section>
+
+<div class="tip" id="env"></div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const post = (u, b) => fetch(u, {method:'POST', headers:{'Content-Type':'application/json'},
+                               body: JSON.stringify(b||{})}).then(r => r.json());
+
+let S = {}, entry = null, round = 0, roundsDone = [];
+
+async function tab(n){
+  for (const k of ['drill','mono','list']){
+    $('p-'+k).classList.toggle('hide', k !== n);
+    $('t-'+k).classList.toggle('on', k === n);
+  }
+  if (n === 'list'){ S = await (await fetch('/api/state')).json(); drawQueue(); }
+}
+
+async function load(){
+  S = await (await fetch('/api/state')).json();
+  entry = S.entry;
+  round = 0; roundsDone = [];
+  $('rounds').innerHTML = '';
+  $('coach').classList.add('hide');
+  $('done').classList.add('hide');
+  $('live').classList.remove('hide');
+  $('say').value = ''; $('better').value = '';
+  $('step').textContent = '第 1 遍';
+  $('zh').textContent = entry ? entry.zh : '题库空了 —— 去「队列」里加一条，或往 ~/.eng/seeds.txt 加中文句子';
+  const n = entry ? (entry.attempts||[]).length : 0;
+  $('hist').textContent = n ? '　（以前练过 ' + n + ' 遍，那几遍的用词也算重复）' : '';
+  $('mic').classList.toggle('hide', !S.mic);
+  $('mmic').classList.toggle('hide', !S.mic);
+  $('mtext').classList.toggle('hide', S.mic);
+  $('mrow').classList.toggle('hide', S.mic);
+  $('env').textContent = (S.mic ? '麦克风+本地 whisper 就绪' : '没检测到 ffmpeg / whisper —— 打字模式')
+    + ' · ' + (S.llm ? '事后反馈已开（只发题面和你的三遍，音频和独白转录永不外发）' : '事后反馈已关，用内置参考说法')
+    + ' · 数据在 engdata/entries.jsonl';
+  drawQueue();
+}
+
+function drawQueue(){
+  const q = S.queue || [];
+  $('qcount').textContent = q.length ? ('未划掉 ' + q.length + ' 条') : '队列空的';
+  $('queue').innerHTML = q.map(e => `<div class="q">
+      <div class="id">${e.id.slice(-6)}</div>
+      <div class="body">
+        <div>${esc(e.zh)}</div>
+        <div class="sub">${e.n ? '练过 ' + e.n + ' 遍' : '还没练过'}${
+          e.better ? ' · better: ' + esc(e.better) : ''}</div>
+      </div>
+      <button class="b" onclick="cross('${e.id}')">划掉</button>
+    </div>`).join('');
+}
+const esc = s => (s||'').replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+
+async function submitSay(){
+  const t = $('say').value.trim();
+  if (!t || !entry) return;
+  const r = await post('/api/attempt', {id: entry.id, text: t});
+  if (r.error) return;
+  roundsDone.push(r);
+  round++;
+  const bad = r.repeated.length
+    ? `<span class="bad">重复用词: ${r.repeated.join(', ')}</span>　<span>新词 ${r.fresh}</span>`
+    : `<span class="good">✓ 完全没重复</span>　<span>新词 ${r.fresh}</span>`;
+  $('rounds').insertAdjacentHTML('beforeend',
+    `<div class="step">第 ${round} 遍</div><div class="said">${r.html}</div><div class="meta">${bad}</div>`);
+  $('say').value = '';
+  if (round >= 3){
+    $('live').classList.add('hide');
+    $('done').classList.remove('hide');
+    $('better').focus();
+  } else {
+    $('step').textContent = '第 ' + (round+1) + ' 遍';
+    $('say').focus();
+  }
+}
+
+async function finish(){
+  $('done').classList.add('hide');
+  $('coach').classList.remove('hide');
+  $('note').innerHTML = '<div class="meta">…</div>';
+  $('refs').innerHTML = '';
+  const r = await post('/api/finish', {id: entry.id, better: $('better').value.trim()});
+  $('note').innerHTML = r.note ? '<div class="note">' + esc(r.note) + '</div>' : '';
+  $('refs').innerHTML = (r.refs||[]).map(x => '<li>' + esc(x) + '</li>').join('');
+}
+
+async function markUsed(){ if (entry){ await post('/api/used', {id: entry.id}); load(); } }
+async function cross(id){ await post('/api/used', {id}); tab('list'); }
+async function addOne(){
+  const zh = $('a-zh').value.trim();
+  if (!zh) return;
+  await post('/api/add', {zh});
+  $('a-zh').value = '';
+  $('addmeta').textContent = '✓ 加了';
+  setTimeout(() => $('addmeta').textContent = '', 1500);
+  tab('list');
+}
+
+/* ---------- 录音：只走本机，blob POST 回来转文字后立刻丢掉 ---------- */
+let rec = null, chunks = [], stream = null, t0 = 0, timer = null;
+
+async function startRec(el, meta){
+  stream = await navigator.mediaDevices.getUserMedia({audio:true});
+  rec = new MediaRecorder(stream);
+  chunks = [];
+  rec.ondataavailable = e => chunks.push(e.data);
+  rec.start();
+  t0 = Date.now();
+  el.textContent = '■ 停止';
+  timer = setInterval(() => {
+    const s = Math.floor((Date.now()-t0)/1000);
+    $(meta).innerHTML = '<span class="dot"></span>' +
+      String(Math.floor(s/60)).padStart(2,'0') + ':' + String(s%60).padStart(2,'0');
+  }, 250);
+}
+
+function stopRec(){
+  clearInterval(timer);
+  return new Promise(res => {
+    rec.onstop = () => { stream.getTracks().forEach(t => t.stop()); res(new Blob(chunks)); };
+    rec.stop();
+  });
+}
+
+async function send(blob){
+  return (await fetch('/api/transcribe', {method:'POST', body: blob})).json();
+}
+
+async function toggleRec(){
+  const el = $('mic');
+  if (!rec){ el.classList.remove('rec'); await startRec(el, 'recmeta'); return; }
+  const blob = await stopRec(); rec = null;
+  el.textContent = '● 开始录音'; el.classList.add('rec');
+  $('recmeta').textContent = '转录中…';
+  const r = await send(blob);
+  $('recmeta').textContent = r.error || '';
+  if (r.text) { $('say').value = r.text; submitSay(); }
+}
+
+let monoSegs = [];
+async function toggleMono(){
+  const el = $('mmic');
+  if (!rec){ el.classList.remove('rec'); await startRec(el, 'mmeta'); return; }
+  const blob = await stopRec(); rec = null;
+  el.textContent = '● 开始'; el.classList.add('rec');
+  $('mmeta').textContent = '转录中…（3 分钟的音频要等一会）';
+  const r = await send(blob);
+  $('mmeta').textContent = r.error || '';
+  if (r.text){ $('mtext').value = r.text; monoSegs = r.segments || []; sendMono(); }
+}
+
+async function sendMono(){
+  const timed = monoSegs.length > 0;
+  const r = await post('/api/mono', {topic: $('topic').value.trim(),
+                                     text: $('mtext').value.trim(), segments: monoSegs});
+  monoSegs = [];
+  $('mres').classList.remove('hide');
+  $('mtip').classList.toggle('hide', !r.pauses.length);
+  $('msum').textContent = '说了 ' + r.words + ' 个词。' + (
+    !timed ? '没有时间戳（手打模式），跳过卡壳分析。'
+    : !r.pauses.length ? '没有超过 2 秒的停顿。今天很顺。'
+    : '卡壳 ' + r.pauses.length + ' 处：');
+  $('mpauses').innerHTML = r.pauses.map((h, i) => `<div class="pause">
+      <div class="txt">${h.gap}s　…${esc(h.before.slice(-45))} <b>▮</b> ${esc(h.after.slice(0,45))}…</div>
+      <div class="row"><input type="text" id="st${i}" placeholder="当时想说的中文是什么">
+        <button class="b" onclick="keep(${i})">进队列</button></div>
+    </div>`).join('');
+}
+
+async function keep(i){
+  const v = $('st'+i).value.trim();
+  if (!v) return;
+  await post('/api/stuck', {zh: v});
+  $('st'+i).value = '✓ 进队列，明天的题';
+  $('st'+i).disabled = true;
+  S = await (await fetch('/api/state')).json();
+  drawQueue();
+}
+
+$('say').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) submitSay();
+});
+load();
+</script>
+</body>
+</html>

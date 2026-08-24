@@ -33,7 +33,8 @@ wheels/
 venv/
 .venv/
 ENV/
-.claude/
+.claude/*
+!.claude/skills/
 
 # Node
 node_modules/
@@ -80,3 +81,11 @@ htmlcov/
 src/frontend/dist/
 docs/openclaw
 /docs/openclaw/
+
+# key 永远不进仓库（真正的 key 在 ~/.eng/config，仓库外）
+engdata/config
+
+# 本地 / Forge 的东西，不进仓库
+.forge/
+.mcp.json
+CLAUDE.md

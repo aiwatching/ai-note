@@ -1,0 +1,158 @@
+# eng 冷启动题库。
+# 顶格行 = 中文题面；缩进行 = 参考说法（三遍说完后才展示，不是标准答案）。
+# 参考说法的用词全部是你早就会的 —— 这就是重点：手边的词够用。
+# 用完不再补 —— 那时队列应该已经被 mono-stuck 填满了，这是设计意图。
+
+这个方案的迁移成本太高，我倾向于分阶段做。
+  This would cost too much to move all at once. Let's do it in steps.
+  Moving everything over is a big lift. I'd rather go piece by piece.
+  We can't do this in one shot. Break it up and take one part at a time.
+
+我担心这个改动的影响面比我们想的大。
+  I think this touches more than we think.
+  This change reaches further than it looks.
+  We're going to break things we haven't thought about yet.
+
+这块我还没想清楚，给我两天。
+  I don't have a clear answer yet. Give me two days.
+  I'm still working through this one. Let me come back Thursday.
+  I haven't got my head around it. Two days and I'll have something.
+
+我理解你们的时间压力，但这个风险我不能接受。
+  I know the date matters. I still can't sign off on this.
+  I get that you're under pressure. This one is too dangerous to ship.
+  The timeline is real, but so is what happens if this goes wrong.
+
+我们先做能覆盖 80% 场景的版本，剩下的下个版本再说。
+  Let's build the part that handles most cases and deal with the rest later.
+  Cover the common path first. The edge cases can wait.
+  Ship what works for almost everyone, then come back for the rest.
+
+这个问题的根因在数据模型，不在这段代码。
+  The code is fine. The problem is how we store the data.
+  This isn't a bug in here. It's the shape of the data.
+  We're looking at the wrong layer. The model is what's broken.
+
+我不同意，但如果决定了我会全力执行。
+  I'd go the other way, but if we decide, I'm in.
+  I don't agree. Once we call it, I'll back it all the way.
+  This isn't my choice, but I'll make it work.
+
+这段遗留代码没人敢动，所以我想先把测试补上。
+  Nobody wants to touch this code. Let's get tests around it first.
+  We're all scared of this file. Tests first, then we can move.
+  No one has changed this in years. I want a safety net before we start.
+
+我们不需要集群，客户的部署规模根本用不上。
+  Our customers never run that big. One box is enough.
+  Nobody deploys at that size. We're solving a problem we don't have.
+  That's more machines than any customer of ours will ever need.
+
+如果现在不重构，明年这个模块会拖垮整个发布。
+  If we leave this alone, it will hold up every release next year.
+  Clean it up now, or it slows everything down later.
+  This part gets worse every quarter. Next year it stops us shipping.
+
+这个指标看起来好，但样本量太小，说明不了问题。
+  The number looks good, but we ran it on almost nothing.
+  Nice result, too few runs. It doesn't tell us much.
+  We don't have enough behind that to trust it.
+
+我需要先看数据，再决定要不要投人进去。
+  Show me the numbers first, then I'll decide who works on it.
+  I want to see what is actually happening before I put people on this.
+  Let me look at the data. Then we talk about who goes where.
+
+我们低估了这个工作量，我来重新排一下优先级。
+  This is bigger than we said. Let me redo the order.
+  We were wrong about how long it takes. I'll re-plan.
+  This turned out much heavier. I'll sort out what comes first.
+
+这不是性能问题，是并发模型选错了。
+  It's not slow. We picked the wrong way to run things at the same time.
+  Speed isn't the issue. The way we handle threads is.
+  Making it faster won't help. How it runs is what's wrong.
+
+客户真正在意的是升级不停机，不是这个功能本身。
+  What they care about is staying up during upgrades, not this feature.
+  Customers want nothing to stop while they move to a new build.
+  The real ask is no downtime. The feature itself isn't the point.
+
+先别加功能了，把现有的稳定性做上去。
+  Stop adding things. Make what we have hold up.
+  No new features. Let's get the current stuff solid.
+  Freeze the list and fix what keeps breaking.
+
+我建议我们做个原型验证一下，再决定方向。
+  Let's build a small version first and see how it goes.
+  Try it rough, then decide.
+  Put something together quickly, learn from it, then pick a direction.
+
+这个设计在小规模没问题，但扩到一千个节点会出问题。
+  This works fine small. At a thousand machines it falls over.
+  Ten boxes, no problem. A thousand and it breaks.
+  It holds up today. It won't when we are ten times bigger.
+
+我可以接受这个方案，但我需要一个回滚计划。
+  I'm fine with this as long as we can back it out.
+  I'll go with it, but tell me how we undo it.
+  Works for me. I want a way out if it goes wrong.
+
+这件事我判断错了，我们换个思路。
+  I got this one wrong. Let's try something else.
+  I called it badly. Time for a different approach.
+  My read was off. Let's start over on this.
+
+# ---- 2026-08-23 追加：专治「名词堆当主语 + is + 抽象名词」----
+# 每条中文都埋了一个"XX 的 YY 太高/太大"的坑。参考说法里
+# 一律不用抽象名词当表语，主语是人或动作，谓语是真动词。
+
+这个改动的风险太大了，我建议先灰度。
+  This change could break a lot. Let's roll it out to a few customers first.
+  I don't want to ship this to everyone at once. Give it to a small group and watch.
+  Too much can go wrong here. Try it on a slice of traffic first.
+
+这个模块的复杂度已经超过我们能维护的程度了。
+  Nobody understands this module end to end any more.
+  We've made this too complicated to keep up with.
+  This has grown past what the team can hold in their heads.
+
+这次排查的工作量比我预估的大三倍。
+  This took me three times longer than I said it would.
+  I was way off on this one. It's three times the work.
+  Tracking this down is eating far more time than I planned for.
+
+这个告警的误报率太高，运维已经开始忽略它了。
+  This alert cries wolf so often that the on-call team tunes it out.
+  We fire this when nothing is wrong, so nobody reads it any more.
+  Ops stopped trusting this one. It goes off for no reason.
+
+这个方案对现有部署的侵入性太强。
+  This asks customers to change too much of what they already run.
+  We'd be reaching into parts of their setup we shouldn't touch.
+  Rolling this out means tearing up what they already have.
+
+这个漏洞的利用门槛很低，必须这周修。
+  Anyone could pull this off. We need it fixed this week.
+  It takes almost no skill to abuse this, so it can't wait.
+  Someone could walk right through this. It goes out this week.
+
+这块的技术债已经开始拖慢交付了。
+  We're paying for shortcuts we took, and it shows in how slow we ship.
+  The mess we left behind is what's holding up releases.
+  Every change here takes longer than it should because of what we skipped.
+
+这个接口在高并发下响应时间会翻倍。
+  When a lot of people hit this at once, it takes twice as long to answer.
+  Under load it slows down to half its speed.
+  Push enough traffic at it and the wait doubles.
+
+我们的检测覆盖率还不够，先补最关键的那几类。
+  We're missing too much. Let's cover the attacks that actually matter first.
+  There are gaps in what we catch. Start with the ones that hurt.
+  We don't see enough of what's out there. Fill the worst holes first.
+
+这个性能问题的根因不在代码，在部署方式。
+  The code is fine. It's how we're running it.
+  Nothing here is slow. The way we deploy it is.
+  We're looking in the wrong place. This is a deployment problem.
